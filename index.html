@@ -1516,7 +1516,7 @@ let loadedReportName = '';
 async function loadStateFromServer(){
   if(!CONFIG.appsScriptUrl){ showBanner('Apps Script URL이 설정되지 않아 이 브라우저에서만 임시로 작업돼요.','error'); return; }
   try{
-    const res = await fetch(CONFIG.appsScriptUrl+'?action=getState');
+    const res = await fetch(CONFIG.appsScriptUrl+'?action=getState', {cache:'no-store'});
     const json = await res.json();
     if(json.ok){
       STATE = Object.assign(STATE, JSON.parse(json.state||'{}'));
@@ -1529,7 +1529,7 @@ async function loadStateFromServer(){
 }
 async function loadImagesFromServer(){
   if(!CONFIG.appsScriptUrl) return;
-  try{ const res=await fetch(CONFIG.appsScriptUrl+'?action=getImages'); const json=await res.json(); if(json.ok) Object.assign(imageCache, json.images); }
+  try{ const res=await fetch(CONFIG.appsScriptUrl+'?action=getImages', {cache:'no-store'}); const json=await res.json(); if(json.ok) Object.assign(imageCache, json.images); }
   catch(e){ console.warn('이미지 로드 실패', e); }
 }
 async function saveStateToServer(){
@@ -1551,8 +1551,16 @@ async function saveStateToServer(){
     // 프리플라이트 없이 요청 자체는 서버에 도달해 실제로 실행된다. no-cors로 보내 저장은 그대로
     // 진행시키고, 실제로 반영됐는지는 CORS가 잘 되는 GET(getReport)으로 다시 확인해서 판단한다.
     await fetch(CONFIG.appsScriptUrl, {method:'POST', mode:'no-cors', body:JSON.stringify({action:'saveReport', name, previousName, state:STATE})});
-    const verifyRes = await fetch(CONFIG.appsScriptUrl+'?action=getReport&name='+encodeURIComponent(name));
-    const verifyJson = await verifyRes.json();
+    // GET은 브라우저/중간 캐시에 걸릴 수 있어서 cache:'no-store' + 매번 다른 쿼리로 캐시를 피하고,
+    // 반영이 살짝 늦을 수 있으니 신선한(20초 이내) savedAt이 보일 때까지 잠깐 간격을 두고 재시도한다.
+    let verifyJson = null;
+    for(let attempt=0; attempt<3; attempt++){
+      if(attempt>0) await new Promise(r=>setTimeout(r,1500));
+      const verifyRes = await fetch(CONFIG.appsScriptUrl+'?action=getReport&name='+encodeURIComponent(name)+'&_ts='+Date.now(), {cache:'no-store'});
+      verifyJson = await verifyRes.json();
+      const freshEnough = verifyJson.ok && verifyJson.savedAt && (Date.now() - new Date(verifyJson.savedAt).getTime() <= 20000);
+      if(freshEnough) break;
+    }
     if(!verifyJson.ok) throw new Error('저장 확인 실패: '+(verifyJson.error||'해당 이름의 리포트를 찾을 수 없어요.'));
     const savedMsAgo = verifyJson.savedAt ? Date.now() - new Date(verifyJson.savedAt).getTime() : Infinity;
     if(savedMsAgo > 20000) throw new Error('저장이 아직 반영되지 않았어요. 잠시 후 다시 시도해주세요.');
@@ -1568,7 +1576,7 @@ async function loadReportList(){
   const sel = document.getElementById('loadReportSelect');
   if(!sel || !CONFIG.appsScriptUrl) return;
   try{
-    const res = await fetch(CONFIG.appsScriptUrl+'?action=listReports');
+    const res = await fetch(CONFIG.appsScriptUrl+'?action=listReports', {cache:'no-store'});
     const json = await res.json();
     if(!json.ok) return;
     const current = sel.value;
@@ -1580,7 +1588,7 @@ async function loadReportList(){
 async function loadReportByName(name){
   if(!CONFIG.appsScriptUrl || !name) return;
   try{
-    const res = await fetch(CONFIG.appsScriptUrl+'?action=getReport&name='+encodeURIComponent(name));
+    const res = await fetch(CONFIG.appsScriptUrl+'?action=getReport&name='+encodeURIComponent(name), {cache:'no-store'});
     const json = await res.json();
     if(!json.ok){ showBanner('불러오기 실패: '+(json.error||'리포트를 찾을 수 없어요.'),'error'); return; }
     STATE = Object.assign(STATE, JSON.parse(json.state||'{}'));
