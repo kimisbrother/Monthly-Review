@@ -12,16 +12,16 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
   :root{
-    --bg:#F6F4EC; --surface:#FFFFFF; --surface-2:#FBF9F2; --border:#E6E1D1;
-    --text:#1B2019; --text-dim:#5F6B62; --text-faint:#93998A;
-    --ap-green-900:#0B2A21; --ap-green-700:#154A38; --ap-green-500:#1F7A54;
-    --ap-gold:#C7A25C; --ap-gold-light:#EAD9AF; --ap-gold-dark:#8C6B32;
-    --primary:var(--ap-green-900); --primary-dim:var(--ap-green-700); --primary-tint:#E7EFE9;
+    --bg:#F2F4F7; --surface:#FFFFFF; --surface-2:#F5F7FA; --border:#DFE4EA;
+    --text:#14181D; --text-dim:#55606B; --text-faint:#88919B;
+    /* 아모레퍼시픽 공식 CI: PACIFIC Blue(진), AMORE Blue(연) — apgroup.com corporate-identity 참고 */
+    --ap-blue-900:#001C58; --ap-blue-700:#1F5795; --ap-blue-400:#5B8FC7;
+    --primary:var(--ap-blue-900); --primary-dim:var(--ap-blue-700); --primary-tint:#E7EDF6;
     --teal:#0C8C7D; --teal-tint:#E6F5F3; --amber:#C2760C; --amber-tint:#FBF0DF;
     --red:#C0392B; --red-tint:#FBEAEA;
     --good:#1F9D6B; --good-tint:#E4F6EE; --bad:#D64545; --bad-tint:#FCEBEA;
-    --radius:16px; --radius-sm:10px;
-    --shadow:0 1px 2px rgba(11,42,33,0.05), 0 14px 30px rgba(11,42,33,0.09);
+    --radius:18px; --radius-sm:10px;
+    --shadow:0 1px 2px rgba(0,28,88,0.04), 0 10px 24px rgba(0,28,88,0.06);
     --font-sans:'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif;
     --font-mono:'IBM Plex Mono', 'SFMono-Regular', Menlo, monospace;
   }
@@ -29,7 +29,7 @@
   html,body{margin:0;padding:0;}
   body{
     background:
-      radial-gradient(1100px 480px at 50% -220px, rgba(31,122,84,0.10), transparent 60%),
+      radial-gradient(1100px 480px at 50% -220px, rgba(31,87,149,0.08), transparent 60%),
       var(--bg);
     color:var(--text); font-family:var(--font-sans); font-size:14px; line-height:1.5; -webkit-font-smoothing:antialiased;
   }
@@ -47,40 +47,40 @@
   .header-panel{
     position:sticky; top:0; z-index:40; border-radius:0 0 22px 22px; overflow:hidden;
     background:var(--surface); border:1px solid var(--border); border-top:none;
-    box-shadow:0 1px 2px rgba(11,42,33,0.04), 0 18px 30px rgba(11,42,33,0.10);
+    box-shadow:0 1px 2px rgba(0,28,88,0.04), 0 18px 30px rgba(0,28,88,0.10);
   }
-  .header-panel::before{content:''; display:block; height:4px; background:linear-gradient(90deg, var(--ap-green-700), var(--ap-gold));}
+  .header-panel::before{content:''; display:block; height:4px; background:linear-gradient(90deg, var(--ap-blue-700), var(--ap-blue-400));}
   .topbar{
     padding:24px 28px 20px; display:flex; align-items:flex-end; justify-content:space-between; gap:16px; flex-wrap:wrap;
   }
-  .kicker{font-size:10.5px; font-weight:700; color:var(--ap-gold-dark); letter-spacing:0.22em; margin-bottom:9px;}
+  .kicker{font-size:10.5px; font-weight:700; color:var(--ap-blue-700); letter-spacing:0.22em; margin-bottom:9px;}
   .topbar-title h1{font-size:34px; font-weight:800; margin:0; letter-spacing:-0.01em; color:var(--primary); font-family:var(--font-sans);}
   .period{display:flex; align-items:baseline; gap:9px; margin-top:14px; padding-top:12px; border-top:1px solid var(--border);}
   .period-label{font-size:10.5px; font-weight:700; color:var(--text-faint); letter-spacing:0.1em;}
-  .period-value{font-size:13.5px; font-weight:700; color:var(--ap-green-700); letter-spacing:0.01em;}
+  .period-value{font-size:13.5px; font-weight:700; color:var(--ap-blue-700); letter-spacing:0.01em;}
   .topbar-controls{display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
   .gear-btn{
     width:36px; height:36px; border-radius:50%; border:1px solid var(--border);
     background:var(--surface-2); color:var(--text-dim); font-size:15px; line-height:1;
     display:flex; align-items:center; justify-content:center; padding:0;
-    box-shadow:0 1px 2px rgba(11,42,33,0.06);
+    box-shadow:0 1px 2px rgba(0,28,88,0.06);
     transition:transform .18s ease, background .18s ease, color .18s ease;
   }
-  .gear-btn:hover{background:var(--primary-tint); color:var(--ap-green-900); transform:rotate(35deg);}
+  .gear-btn:hover{background:var(--primary-tint); color:var(--ap-blue-900); transform:rotate(35deg);}
   .btn{
     display:inline-flex; align-items:center; gap:6px; border-radius:10px; border:1px solid var(--border);
     padding:8px 14px; font-size:12.5px; font-weight:600; color:var(--text);
-    background:linear-gradient(180deg, #ffffff 0%, #F8F6EE 100%);
-    box-shadow:0 1px 2px rgba(11,42,33,0.06), 0 6px 14px rgba(11,42,33,0.05), 0 1px 0 rgba(255,255,255,0.6) inset;
-    transition:transform .12s ease, box-shadow .12s ease, background .12s ease;
+    background:var(--surface);
+    box-shadow:0 1px 2px rgba(16,24,20,0.05);
+    transition:transform .12s ease, box-shadow .12s ease, background .12s ease, border-color .12s ease;
   }
-  .btn:hover{transform:translateY(-1px); box-shadow:0 6px 16px rgba(11,42,33,0.12), 0 1px 0 rgba(255,255,255,0.6) inset; border-color:#D8D0B8;}
-  .btn:active{transform:translateY(0); box-shadow:0 1px 1px rgba(11,42,33,0.1) inset;}
+  .btn:hover{transform:translateY(-1px); background:var(--primary-tint); border-color:var(--ap-blue-700); box-shadow:0 4px 10px rgba(16,24,20,0.08);}
+  .btn:active{transform:translateY(0); box-shadow:0 1px 1px rgba(16,24,20,0.08) inset;}
   .btn-primary{
-    background:linear-gradient(180deg, var(--ap-green-700) 0%, var(--ap-green-900) 100%); border-color:#081F17; color:#fff;
-    box-shadow:0 3px 10px rgba(11,42,33,0.4), 0 1px 0 rgba(255,255,255,0.15) inset;
+    background:linear-gradient(180deg, var(--ap-blue-700) 0%, var(--ap-blue-900) 100%); border-color:#001030; color:#fff;
+    box-shadow:0 3px 10px rgba(0,28,88,0.4), 0 1px 0 rgba(255,255,255,0.15) inset;
   }
-  .btn-primary:hover{background:linear-gradient(180deg, #1C5A44 0%, #0E3527 100%); box-shadow:0 8px 18px rgba(11,42,33,0.45), 0 1px 0 rgba(255,255,255,0.15) inset;}
+  .btn-primary:hover{background:linear-gradient(180deg, #2E66A8 0%, #001440 100%); box-shadow:0 8px 18px rgba(0,28,88,0.45), 0 1px 0 rgba(255,255,255,0.15) inset;}
   .btn:disabled{opacity:.5; cursor:not-allowed; transform:none;}
   .spin{display:inline-block; animation:spin .8s linear infinite;}
   @keyframes spin{to{transform:rotate(360deg);}}
@@ -93,13 +93,13 @@
   .tabs{display:flex; gap:5px; padding:10px 20px 0; background:var(--surface-2); border-top:1px solid var(--border); overflow-x:auto;}
   .tab-btn{position:relative; top:2px; border:none; background:transparent; padding:11px 18px; font-size:13px; font-weight:600; color:var(--text-faint); white-space:nowrap; border-radius:10px 10px 0 0; transition:all .15s ease;}
   .tab-btn:hover{color:var(--text); background:rgba(255,255,255,0.55);}
-  .tab-btn.active{top:0; color:var(--ap-green-900); background:var(--surface); font-weight:800; box-shadow:0 -3px 10px rgba(11,42,33,0.06);}
-  .tab-btn.active::after{content:''; position:absolute; left:14px; right:14px; bottom:-1px; height:2px; border-radius:2px; background:linear-gradient(90deg,var(--ap-green-700),var(--ap-gold));}
+  .tab-btn.active{top:0; color:var(--ap-blue-900); background:var(--surface); font-weight:800; box-shadow:0 -3px 10px rgba(0,28,88,0.06);}
+  .tab-btn.active::after{content:''; position:absolute; left:14px; right:14px; bottom:-1px; height:2px; border-radius:2px; background:linear-gradient(90deg,var(--ap-blue-700),var(--ap-blue-400));}
   .tab-panel{display:none; padding:22px 0;}
   .tab-panel.active{display:block;}
 
   .card{position:relative; overflow:hidden; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:24px 26px 22px; margin-bottom:22px; box-shadow:var(--shadow);}
-  .card::before{content:''; position:absolute; top:0; left:0; right:0; height:3px; background:linear-gradient(90deg, var(--ap-green-700), var(--ap-gold));}
+  .card::before{content:''; position:absolute; top:0; left:0; right:0; height:3px; background:linear-gradient(90deg, var(--ap-blue-700), var(--ap-blue-400));}
   .card-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; flex-wrap:wrap; gap:8px;}
   .card-head h2{font-size:14.5px; font-weight:700; margin:0; outline:none; letter-spacing:0.01em;}
   .card-head h2[contenteditable]:hover{background:var(--surface-2); border-radius:4px; padding:2px 4px; margin:-2px -4px;}
@@ -107,17 +107,17 @@
   .section-mark{display:inline-block; width:3px; height:13px; background:var(--primary); margin-right:6px; vertical-align:-2px; border-radius:2px;}
   .stat-line{font-size:13px; font-weight:600; color:var(--text); background:var(--surface-2); border:1px solid var(--border); border-radius:8px; padding:10px 12px;}
 
-  .stat-cards{display:grid; grid-template-columns:repeat(auto-fit,minmax(148px,1fr)); gap:10px;}
-  .stat-card{display:flex; align-items:center; gap:11px; background:var(--surface-2); border:1px solid var(--border); border-radius:14px; padding:13px 14px; transition:transform .15s ease, box-shadow .15s ease;}
-  .stat-card:hover{transform:translateY(-2px); box-shadow:0 8px 18px rgba(11,42,33,0.08);}
-  .stat-card .icon-wrap{width:36px; height:36px; border-radius:10px; display:flex; align-items:center; justify-content:center; flex:0 0 auto;}
-  .stat-card .icon-wrap svg{width:18px; height:18px;}
-  .stat-card .icon-wrap.c-green{background:var(--primary-tint); color:var(--ap-green-700);}
-  .stat-card .icon-wrap.c-gold{background:#F5ECD8; color:var(--ap-gold-dark);}
+  .stat-cards{display:grid; grid-template-columns:repeat(auto-fit,minmax(168px,1fr)); gap:12px;}
+  .stat-card{display:flex; align-items:center; gap:12px; background:var(--surface-2); border:1px solid var(--border); border-radius:14px; padding:15px 16px; transition:transform .15s ease, box-shadow .15s ease, border-color .15s ease;}
+  .stat-card:hover{transform:translateY(-2px); box-shadow:0 10px 20px rgba(16,24,20,0.07); border-color:#D3DACB;}
+  .stat-card .icon-wrap{width:38px; height:38px; border-radius:11px; display:flex; align-items:center; justify-content:center; flex:0 0 auto;}
+  .stat-card .icon-wrap svg{width:19px; height:19px;}
+  .stat-card .icon-wrap.c-green{background:var(--primary-tint); color:var(--ap-blue-700);}
+  .stat-card .icon-wrap.c-gold{background:#E7EFF8; color:var(--ap-blue-700);}
   .stat-card .icon-wrap.c-teal{background:var(--teal-tint); color:var(--teal);}
   .stat-card .icon-wrap.c-amber{background:var(--amber-tint); color:var(--amber);}
-  .stat-card-value{font-size:17px; font-weight:800; color:var(--text); font-family:var(--font-mono); letter-spacing:-0.01em; line-height:1.2;}
-  .stat-card-label{font-size:10.5px; color:var(--text-faint); font-weight:700; margin-top:2px; letter-spacing:0.02em;}
+  .stat-card-value{font-size:18px; font-weight:800; color:var(--text); font-family:var(--font-mono); letter-spacing:-0.01em; line-height:1.2;}
+  .stat-card-label{font-size:10.5px; color:var(--text-faint); font-weight:700; margin-top:3px; letter-spacing:0.03em;}
 
   .delta-pill{display:inline-flex; align-items:center; gap:3px; font-weight:700; padding:2px 7px 2px 6px; border-radius:20px; font-size:11.5px;}
   .delta-pill .delta-tri{font-size:8px; line-height:1;}
@@ -126,7 +126,7 @@
   .delta-pill.delta-flat{color:var(--text-faint); background:var(--surface-2);}
 
   .card.card-comment{background:var(--surface-2);}
-  .card.card-comment::before{background:linear-gradient(90deg, var(--ap-gold), var(--ap-gold-light));}
+  .card.card-comment::before{background:linear-gradient(90deg, var(--ap-blue-400), var(--ap-blue-400));}
 
   .editor-toolbar{display:none; gap:4px; margin-bottom:8px;}
   .comment-wrap:focus-within .editor-toolbar{display:flex;}
@@ -137,16 +137,16 @@
   .comment-box:empty:before{content:attr(data-placeholder); color:var(--text-faint);}
 
   .table-wrap{overflow-x:auto; border:1px solid var(--border); border-radius:14px;}
-  table{width:100%; border-collapse:collapse; font-size:12.5px; min-width:640px;}
-  thead th{background:linear-gradient(180deg,var(--ap-green-700),var(--ap-green-900)); color:#FBF7EC; font-weight:700; text-align:center; padding:13px 16px; white-space:nowrap; letter-spacing:0.03em; font-size:11px; text-transform:uppercase;}
+  table{width:100%; border-collapse:collapse; font-size:13px; min-width:640px;}
+  thead th{background:linear-gradient(180deg,var(--ap-blue-700),var(--ap-blue-900)); color:#F3F7FC; font-weight:700; text-align:center; padding:13px 16px; white-space:nowrap; letter-spacing:0.04em; font-size:11.5px; text-transform:uppercase;}
   thead th:first-child{text-align:left;}
   tbody tr.row-tint td:not(.hl){background:var(--surface-2);}
-  tbody tr.row-tint:hover td:not(.hl){background:#F2F0E6;}
-  tbody td{padding:11px 16px; text-align:right; border-bottom:1px solid #EEF0F5; font-family:var(--font-mono); white-space:nowrap; cursor:pointer; transition:background .1s ease;}
-  tbody td:first-child{text-align:left; font-family:var(--font-sans); cursor:default;}
-  tbody tr:hover td{background:#F5F7FB;}
+  tbody tr.row-tint:hover td:not(.hl){background:#EEF1E9;}
+  tbody td{padding:12px 16px; text-align:right; border-bottom:1px solid var(--border); font-family:var(--font-mono); font-variant-numeric:tabular-nums; white-space:nowrap; cursor:pointer; transition:background .1s ease;}
+  tbody td:first-child{text-align:left; font-family:var(--font-sans); font-weight:500; cursor:default;}
+  tbody tr:hover td{background:#F1F4EE;}
   tbody tr:last-child td{border-bottom:none;}
-  tbody tr.total-row td, tbody tr.subtotal-row td{font-weight:800; background:var(--primary-tint); color:var(--ap-green-900); cursor:default; border-top:2px solid var(--ap-green-700); border-bottom:1px solid var(--ap-green-700);}
+  tbody tr.total-row td, tbody tr.subtotal-row td{font-weight:800; background:var(--primary-tint); color:var(--ap-blue-900); cursor:default; border-top:2px solid var(--ap-blue-700); border-bottom:1px solid var(--ap-blue-700);}
   tbody tr.total-row:hover td, tbody tr.subtotal-row:hover td{background:var(--primary-tint);}
   tbody tr.target-row td, tbody tr.actual-row td, tbody tr.delta-row td{cursor:default;}
   td.hl{box-shadow:inset 0 0 0 2px var(--red); background:var(--red-tint);}
@@ -173,11 +173,11 @@
   .inf-name .readonly-name{font-size:11.5px; font-weight:700; padding:2px 0;}
 
   .lesson-block-head{display:flex; align-items:center; justify-content:space-between; margin-bottom:10px;}
-  .lesson-block-tag{font-size:10.5px; font-weight:700; letter-spacing:0.04em; text-transform:uppercase; color:var(--ap-gold-dark); background:#F5ECD8; padding:3px 9px; border-radius:20px;}
+  .lesson-block-tag{font-size:10.5px; font-weight:700; letter-spacing:0.04em; text-transform:uppercase; color:var(--ap-blue-700); background:#E7EFF8; padding:3px 9px; border-radius:20px;}
   .lesson-block-controls{display:flex; gap:4px;}
   .lesson-block-controls button{border:1px solid var(--border); background:var(--surface-2); border-radius:6px; width:26px; height:26px; font-size:11px; color:var(--text-dim); cursor:pointer;}
   .lesson-block-controls button:disabled{opacity:.35; cursor:not-allowed;}
-  .lesson-block-controls button:hover:not(:disabled){background:var(--primary-tint); color:var(--ap-green-900);}
+  .lesson-block-controls button:hover:not(:disabled){background:var(--primary-tint); color:var(--ap-blue-900);}
   .lesson-caption{width:100%; border:none; border-top:1px solid var(--border); margin-top:8px; padding:8px 2px 0; font-size:12.5px; color:var(--text-dim); background:transparent; outline:none;}
   .lesson-caption::placeholder{color:var(--text-faint);}
   table.lesson-table td{min-width:90px;}
@@ -188,7 +188,7 @@
   .chart-wrap{height:420px; position:relative;}
 
   .chart-tooltip{position:absolute; opacity:0; pointer-events:none; transition:opacity .1s ease; z-index:20; transform:translate(-50%,-100%); margin-top:-12px; will-change:transform, opacity;}
-  .ctt{background:var(--ap-green-900); color:#fff; border-radius:12px; padding:13px 15px; font-size:12px; min-width:220px; box-shadow:0 14px 28px rgba(0,0,0,0.32); border:1px solid rgba(255,255,255,0.08);}
+  .ctt{background:var(--ap-blue-900); color:#fff; border-radius:12px; padding:13px 15px; font-size:12px; min-width:220px; box-shadow:0 14px 28px rgba(0,0,0,0.32); border:1px solid rgba(255,255,255,0.08);}
   .ctt-date{font-family:var(--font-mono); font-size:10.5px; color:rgba(255,255,255,0.55); text-align:center; letter-spacing:0.03em; margin-bottom:9px;}
   .ctt-summary{display:flex; justify-content:center; gap:20px; padding-bottom:10px;}
   .ctt-summary-val{font-weight:800; font-size:13.5px; text-align:center; color:#fff;}
@@ -305,16 +305,34 @@
           <div class="field"><label>시작일</label><input type="date" id="cfg-rangeStart"></div>
           <div class="field"><label>종료일</label><input type="date" id="cfg-rangeEnd"></div>
         </div>
-        <div class="field">
-          <label>제외할 캠페인</label>
-          <div class="desc">기간을 지정하면 그 기간 기준 7일 이상 집행된 캠페인만 자동으로 집계에 포함되고, 나머지는 자동 제외돼요. 아래에서 그중 일부를 추가로 체크해 제외할 수 있어요.</div>
-          <div class="excl-checklist" id="excludeCampaignList"></div>
-        </div>
-        <div class="field">
-          <label>제외할 광고그룹</label>
-          <div class="desc">선택한 기간 기준 7일 이상 데이터가 집계된 광고그룹만 표시돼요.</div>
-          <div class="excl-checklist" id="excludeAdGroupList"></div>
-        </div>
+        <details class="settings-collapse">
+          <summary>제외할 캠페인</summary>
+          <div class="field" style="margin-top:8px;">
+            <div class="desc">기간을 지정하면 그 기간 기준 7일 이상 집행된 캠페인만 자동으로 집계에 포함되고, 나머지는 자동 제외돼요. 아래에서 그중 일부를 추가로 체크해 제외할 수 있어요.</div>
+            <input type="text" id="excludeCampaignSearchInput" placeholder="🔍 캠페인 검색" style="width:100%; padding:7px 9px; border:1px solid var(--border); border-radius:8px; font-size:12.5px; margin-bottom:6px;">
+            <div class="excl-checklist" id="excludeCampaignList"></div>
+            <div id="excludeCampaignManualTags" style="margin-top:6px;"></div>
+            <div class="desc" style="margin-top:8px;">목록에 없는 캠페인(7일 미만 집행 등)도 이름을 직접 입력해 제외할 수 있어요.</div>
+            <div style="display:flex; gap:8px; margin-top:4px;">
+              <input type="text" id="excludeCampaignManualInput" placeholder="캠페인명 직접 입력" style="flex:1; padding:8px 9px; border:1px solid var(--border); border-radius:8px; font-size:13px;">
+              <button class="btn" id="excludeCampaignManualAdd">+ 추가</button>
+            </div>
+          </div>
+        </details>
+        <details class="settings-collapse">
+          <summary>제외할 광고그룹</summary>
+          <div class="field" style="margin-top:8px;">
+            <div class="desc">선택한 기간 기준 7일 이상 데이터가 집계된 광고그룹만 표시돼요.</div>
+            <input type="text" id="excludeAdGroupSearchInput" placeholder="🔍 광고그룹 검색" style="width:100%; padding:7px 9px; border:1px solid var(--border); border-radius:8px; font-size:12.5px; margin-bottom:6px;">
+            <div class="excl-checklist" id="excludeAdGroupList"></div>
+            <div id="excludeAdGroupManualTags" style="margin-top:6px;"></div>
+            <div class="desc" style="margin-top:8px;">목록에 없는 광고그룹도 이름을 직접 입력해 제외할 수 있어요.</div>
+            <div style="display:flex; gap:8px; margin-top:4px;">
+              <input type="text" id="excludeAdGroupManualInput" placeholder="광고그룹명 직접 입력" style="flex:1; padding:8px 9px; border:1px solid var(--border); border-radius:8px; font-size:13px;">
+              <button class="btn" id="excludeAdGroupManualAdd">+ 추가</button>
+            </div>
+          </div>
+        </details>
       </div>
 
       <details class="settings-collapse">
@@ -375,7 +393,7 @@ let RAWROWS = [], RAWHEADERS = [];
 let STATE = {
   dateRange:{start:'',end:''}, excludedCampaigns:[], excludedAdGroups:[], tableTitles:{}, comments:{}, highlights:{},
   cardHighlights:{}, images:{},
-  targets:{ summary:{budget:0,impression:0,click:0,landingView:0,view:0}, country:{} },
+  targets:{ summary:{budget:0,cpm:0,ctr:0,cpc:0,vtr:0,landingView:0}, country:{} },
   optDates:{}, lessonBlocks:[]
 };
 let charts = {};
@@ -391,7 +409,7 @@ function ensureStateShape(){
   STATE.cardHighlights = STATE.cardHighlights || {};
   STATE.images = STATE.images || {};
   STATE.targets = STATE.targets || {};
-  STATE.targets.summary = STATE.targets.summary || {budget:0,impression:0,click:0,landingView:0,view:0};
+  STATE.targets.summary = STATE.targets.summary || {budget:0,cpm:0,ctr:0,cpc:0,vtr:0,landingView:0};
   STATE.targets.country = STATE.targets.country || {};
   STATE.optDates = STATE.optDates || {};
   STATE.lessonBlocks = STATE.lessonBlocks || [];
@@ -616,17 +634,25 @@ function buildDeltaRow(actual, base){
   return ['spent','impression','click','landingView','cpm','cpc','ctr','view','vtr','cpv'].map(k=>deltaBadge(k, actual[k], base[k]));
 }
 
+// Budget/CPM/CTR/CPC/VTR/LP View만 입력받아 Impression/Click/View를 역산한다.
+// Impression은 CPM 기준(=Budget/CPM*1000)으로만 구해지고, Click은 CPC가 있으면 CPC 기준(Budget/CPC)을
+// 우선하고 없으면 CTR×Impression으로, View는 VTR×Impression으로 구한다.
+function deriveMediaMixTarget(t){
+  const budget = Number(t.budget)||0, cpm = Number(t.cpm)||0, ctr = Number(t.ctr)||0, cpc = Number(t.cpc)||0, vtr = Number(t.vtr)||0;
+  const landingView = Number(t.landingView)||0;
+  const impression = cpm ? safeDiv(budget,cpm)*1000 : 0;
+  const click = cpc ? safeDiv(budget,cpc) : (ctr && impression ? impression*(ctr/100) : 0);
+  const view = (vtr && impression) ? impression*(vtr/100) : 0;
+  return { spent:budget, impression, click, landingView, view,
+    ctr:safeDiv(click,impression), cpc:safeDiv(budget,click), cpm:safeDiv(budget,impression)*1000,
+    vtr:safeDiv(view,impression), cpv:safeDiv(budget,view) };
+}
 function buildMediaMixTable(rows, target){
-  const t = target || {budget:0,impression:0,click:0,landingView:0,view:0};
-  const tSpent = Number(t.budget)||0, tImp = Number(t.impression)||0, tClick = Number(t.click)||0, tLandingView = Number(t.landingView)||0, tView = Number(t.view)||0;
-  const targetAgg = {
-    spent:tSpent, impression:tImp, click:tClick, landingView:tLandingView, view:tView,
-    ctr:safeDiv(tClick,tImp), cpc:safeDiv(tSpent,tClick), cpm:safeDiv(tSpent,tImp)*1000,
-    vtr:safeDiv(tView,tImp), cpv:safeDiv(tSpent,tView)
-  };
+  const t = target || {};
+  const targetAgg = deriveMediaMixTarget(t);
   const actual = aggregate(rows);
   const deltaRow = buildDeltaRow(actual, targetAgg);
-  if(!tSpent && !tImp && !tClick && !tView){
+  if(!(Number(t.budget)||Number(t.cpm)||Number(t.ctr)||Number(t.cpc)||Number(t.vtr))){
     return `<div class="empty-state">설정에서 미디어믹스(Target) 값을 입력하면 이 표가 채워져요.<br><br>` +
       `<table style="margin-top:8px;"><thead><tr><th>구분</th>${KO_HEADERS.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>` +
       `<tr class="actual-row"><td>실집행</td>${koCells(actual).map(c=>`<td>${c}</td>`).join('')}</tr></tbody></table></div>`;
@@ -757,9 +783,13 @@ function compressImage(file){
     reader.onerror=reject; reader.readAsDataURL(file);
   });
 }
+// slotKey(주로 'name::인플루언서명') 기준으로 결정적인 키를 만든다 — 매번 새 키를 발급하는 대신
+// 이 키로 서버 전체 이미지 캐시(imageCache, getImages로 전체를 불러옴)를 바로 찾을 수 있어서
+// 다른 리포트에서 같은 이름으로 올린 사진이 새 리포트에도 STATE.images 기록 없이 자동으로 매칭된다.
+function canonicalImgKey(slotKey){ return 'img_'+slotKey.replace(/[^a-zA-Z0-9]/g,'_'); }
 async function setSlotImage(slotKey, file){
   const dataUrl = await compressImage(file);
-  const imgKey = 'img_'+slotKey.replace(/[^a-zA-Z0-9]/g,'_')+'_'+Date.now();
+  const imgKey = canonicalImgKey(slotKey);
   imageCache[imgKey] = dataUrl;
   STATE.images[slotKey] = imgKey;
   if(CONFIG.appsScriptUrl) fetch(CONFIG.appsScriptUrl, {method:'POST', body:JSON.stringify({action:'saveImage', key:imgKey, data:dataUrl})}).catch(()=>{});
@@ -767,7 +797,13 @@ async function setSlotImage(slotKey, file){
 }
 function buildImgSlot(slotKey, legacyKey, extraClass){
   // legacyKey: 이름 기준 공유 방식으로 바꾸기 전, 카드별로 저장했던 옛 키 — 예전에 올린 사진도 계속 보이게 함
-  const imgKey = STATE.images[slotKey] || (legacyKey && STATE.images[legacyKey]);
+  // STATE.images에 slotKey가 명시적으로 있으면(삭제 시 null로 기록) 그 값을 그대로 따르고,
+  // 아예 기록이 없을 때만 이름 기반 canonical 키로 전역 이미지 캐시를 찾아본다.
+  const canonical = canonicalImgKey(slotKey);
+  let imgKey;
+  if(slotKey in STATE.images) imgKey = STATE.images[slotKey];
+  else if(legacyKey && legacyKey in STATE.images) imgKey = STATE.images[legacyKey];
+  else imgKey = imageCache[canonical] ? canonical : null;
   const cached = imgKey ? imageCache[imgKey] : null;
   const legacyAttr = legacyKey ? ` data-legacy-slot="${esc(legacyKey)}"` : '';
   return `<div class="img-slot ${extraClass||''}" data-slot="${esc(slotKey)}"${legacyAttr}>
@@ -785,8 +821,9 @@ document.addEventListener('click', e=>{
   if(VIEW_MODE) return;
   const rm = e.target.closest('[data-remove-slot]'); if(!rm) return;
   e.stopPropagation();
-  delete STATE.images[rm.dataset.removeSlot];
-  if(rm.dataset.legacySlot) delete STATE.images[rm.dataset.legacySlot];
+  // delete가 아니라 명시적 null: canonical 키로의 전역 이미지 자동 매칭을 이 슬롯에서만 끈다
+  STATE.images[rm.dataset.removeSlot] = null;
+  if(rm.dataset.legacySlot) STATE.images[rm.dataset.legacySlot] = null;
   renderCurrentTab();
 });
 document.addEventListener('change', e=>{
@@ -1041,7 +1078,7 @@ function renderTrendChart(canvasId, chartKey, rows, campCol, ctCol, adGroupCol, 
           }
         },
         scales:{
-          y:{ position:'left', stacked:true, grid:{color:'rgba(11,42,33,0.06)'}, ticks:{callback:v=>fmtWon(v)}, title:{display:true,text:'Spend (₩)',font:{size:10}} },
+          y:{ position:'left', stacked:true, grid:{color:'rgba(0,28,88,0.06)'}, ticks:{callback:v=>fmtWon(v)}, title:{display:true,text:'Spend (₩)',font:{size:10}} },
           y1:{ position:'right', grid:{drawOnChartArea:false}, ticks:{callback:v=>v+'%'}, title:{display:true,text:'CTR / VTR',font:{size:10}} }
         }
       }
@@ -1471,9 +1508,45 @@ function renderExclusionCheckboxes(){
   agBox.innerHTML = groups.length ? groups.map(g=>
     `<label><input type="checkbox" data-excl-adgroup value="${esc(g)}" ${STATE.excludedAdGroups.includes(g)?'checked':''}> ${esc(g)}</label>`).join('')
     : '<div class="desc">7일 이상 집계된 광고그룹이 없어요 (또는 Ad Group 컬럼 매핑 필요).</div>';
+  applyExclSearch('excludeCampaignList', document.getElementById('excludeCampaignSearchInput').value);
+  applyExclSearch('excludeAdGroupList', document.getElementById('excludeAdGroupSearchInput').value);
+  // 자동 목록(체크박스)에 없는, 직접 입력으로 추가한 제외 항목은 삭제 가능한 태그로 보여준다
+  const campSet = new Set(camps), groupSet = new Set(groups);
+  document.getElementById('excludeCampaignManualTags').innerHTML = STATE.excludedCampaigns.filter(c=>!campSet.has(c))
+    .map(c=>`<span class="excluded-tag">${esc(c)}<button data-manual-remove-campaign="${esc(c)}">✕</button></span>`).join('');
+  document.getElementById('excludeAdGroupManualTags').innerHTML = STATE.excludedAdGroups.filter(g=>!groupSet.has(g))
+    .map(g=>`<span class="excluded-tag">${esc(g)}<button data-manual-remove-adgroup="${esc(g)}">✕</button></span>`).join('');
+}
+function applyExclSearch(listId, query){
+  const q = query.trim().toLowerCase();
+  document.querySelectorAll(`#${listId} label`).forEach(lb=>{
+    lb.style.display = (!q || lb.textContent.toLowerCase().includes(q)) ? '' : 'none';
+  });
 }
 document.getElementById('cfg-rangeStart').addEventListener('change', renderExclusionCheckboxes);
 document.getElementById('cfg-rangeEnd').addEventListener('change', renderExclusionCheckboxes);
+document.getElementById('excludeCampaignSearchInput').addEventListener('input', e=>applyExclSearch('excludeCampaignList', e.target.value));
+document.getElementById('excludeAdGroupSearchInput').addEventListener('input', e=>applyExclSearch('excludeAdGroupList', e.target.value));
+document.getElementById('excludeCampaignManualAdd').addEventListener('click', ()=>{
+  const inp = document.getElementById('excludeCampaignManualInput');
+  const v = inp.value.trim();
+  if(v && !STATE.excludedCampaigns.includes(v)) STATE.excludedCampaigns.push(v);
+  inp.value = '';
+  renderExclusionCheckboxes();
+});
+document.getElementById('excludeAdGroupManualAdd').addEventListener('click', ()=>{
+  const inp = document.getElementById('excludeAdGroupManualInput');
+  const v = inp.value.trim();
+  if(v && !STATE.excludedAdGroups.includes(v)) STATE.excludedAdGroups.push(v);
+  inp.value = '';
+  renderExclusionCheckboxes();
+});
+document.addEventListener('click', e=>{
+  const rmC = e.target.closest('[data-manual-remove-campaign]');
+  if(rmC){ STATE.excludedCampaigns = STATE.excludedCampaigns.filter(c=>c!==rmC.dataset.manualRemoveCampaign); renderExclusionCheckboxes(); return; }
+  const rmG = e.target.closest('[data-manual-remove-adgroup]');
+  if(rmG){ STATE.excludedAdGroups = STATE.excludedAdGroups.filter(g=>g!==rmG.dataset.manualRemoveAdgroup); renderExclusionCheckboxes(); }
+});
 
 async function syncData(){
   const btn=document.getElementById('syncBtn');
@@ -1537,15 +1610,17 @@ function buildMappingUI(headers){
 function buildTargetSummaryUI(){
   const t = STATE.targets.summary;
   document.getElementById('targetSummaryGrid').innerHTML = `
-    <div class="target-header"><span class="spacer"></span><span>Budget</span><span>Impression</span><span>Click</span><span>LP View</span><span>View</span></div>
+    <div class="target-header"><span class="spacer"></span><span>Budget</span><span>CPM</span><span>CTR(%)</span><span>CPC</span><span>VTR(%)</span><span>LP View</span></div>
     <div class="target-row-grid">
       <div class="trg-label">Target</div>
       <input type="number" id="tsum-budget" value="${t.budget||0}">
-      <input type="number" id="tsum-impression" value="${t.impression||0}">
-      <input type="number" id="tsum-click" value="${t.click||0}">
+      <input type="number" id="tsum-cpm" value="${t.cpm||0}">
+      <input type="number" step="0.01" id="tsum-ctr" value="${t.ctr||0}">
+      <input type="number" id="tsum-cpc" value="${t.cpc||0}">
+      <input type="number" step="0.01" id="tsum-vtr" value="${t.vtr||0}">
       <input type="number" id="tsum-landingView" value="${t.landingView||0}">
-      <input type="number" id="tsum-view" value="${t.view||0}">
-    </div>`;
+    </div>
+    <div class="desc">Impression/Click/View는 CPM·CPC(우선)·CTR·VTR로부터 자동 역산돼요.</div>`;
 }
 function buildTargetCountryUI(){
   const countries = uniqueCountries();
@@ -1560,14 +1635,15 @@ function buildTargetCountryUI(){
     const mediaRows = medias.map(media=>{
       const mk = media.toLowerCase();
       const mt = t[mk] || {};
-      return `<div class="target-header"><span class="spacer"></span><span>Budget</span><span>Impression</span><span>Click</span><span>LP View</span><span>View</span></div>
+      return `<div class="target-header"><span class="spacer"></span><span>Budget</span><span>CPM</span><span>CTR(%)</span><span>CPC</span><span>VTR(%)</span><span>LP View</span></div>
       <div class="target-row-grid">
         <div class="trg-label">${esc(media)}</div>
         <input type="number" data-t-country="${cKey}" data-t-media="${mk}" data-t-field="budget" value="${mt.budget||0}">
-        <input type="number" data-t-country="${cKey}" data-t-media="${mk}" data-t-field="impression" value="${mt.impression||0}">
-        <input type="number" data-t-country="${cKey}" data-t-media="${mk}" data-t-field="click" value="${mt.click||0}">
+        <input type="number" data-t-country="${cKey}" data-t-media="${mk}" data-t-field="cpm" value="${mt.cpm||0}">
+        <input type="number" step="0.01" data-t-country="${cKey}" data-t-media="${mk}" data-t-field="ctr" value="${mt.ctr||0}">
+        <input type="number" data-t-country="${cKey}" data-t-media="${mk}" data-t-field="cpc" value="${mt.cpc||0}">
+        <input type="number" step="0.01" data-t-country="${cKey}" data-t-media="${mk}" data-t-field="vtr" value="${mt.vtr||0}">
         <input type="number" data-t-country="${cKey}" data-t-media="${mk}" data-t-field="landingView" value="${mt.landingView||0}">
-        <input type="number" data-t-country="${cKey}" data-t-media="${mk}" data-t-field="view" value="${mt.view||0}">
       </div>
       <div class="field" style="margin-top:2px;"><label style="font-weight:500;">${esc(media)} 최적화 적용일 (선택)</label>
         <input type="date" data-opt-country="${cKey}" data-opt-media="${mk}" value="${od[mk]||''}"></div>`;
@@ -1604,15 +1680,22 @@ document.getElementById('modalSave').addEventListener('click', ()=>{
 
   STATE.dateRange.start = document.getElementById('cfg-rangeStart').value;
   STATE.dateRange.end = document.getElementById('cfg-rangeEnd').value;
-  STATE.excludedCampaigns = Array.from(document.querySelectorAll('[data-excl-campaign]:checked')).map(el=>el.value);
-  STATE.excludedAdGroups = Array.from(document.querySelectorAll('[data-excl-adgroup]:checked')).map(el=>el.value);
+  // 체크박스는 "7일 이상 집행" 목록만 다루므로, 그 목록에 없는 수동 추가 항목(제외 배열에는 있지만
+  // 체크박스로는 표시되지 않는 값)은 그대로 남기고 체크된 값과 합친다.
+  const campCheckboxVals = Array.from(document.querySelectorAll('[data-excl-campaign]')).map(el=>el.value);
+  const checkedCamps = Array.from(document.querySelectorAll('[data-excl-campaign]:checked')).map(el=>el.value);
+  STATE.excludedCampaigns = Array.from(new Set([...checkedCamps, ...STATE.excludedCampaigns.filter(c=>!campCheckboxVals.includes(c))]));
+  const agCheckboxVals = Array.from(document.querySelectorAll('[data-excl-adgroup]')).map(el=>el.value);
+  const checkedAg = Array.from(document.querySelectorAll('[data-excl-adgroup]:checked')).map(el=>el.value);
+  STATE.excludedAdGroups = Array.from(new Set([...checkedAg, ...STATE.excludedAdGroups.filter(g=>!agCheckboxVals.includes(g))]));
 
   STATE.targets.summary = {
     budget: Number(document.getElementById('tsum-budget').value)||0,
-    impression: Number(document.getElementById('tsum-impression').value)||0,
-    click: Number(document.getElementById('tsum-click').value)||0,
-    landingView: Number(document.getElementById('tsum-landingView').value)||0,
-    view: Number(document.getElementById('tsum-view').value)||0
+    cpm: Number(document.getElementById('tsum-cpm').value)||0,
+    ctr: Number(document.getElementById('tsum-ctr').value)||0,
+    cpc: Number(document.getElementById('tsum-cpc').value)||0,
+    vtr: Number(document.getElementById('tsum-vtr').value)||0,
+    landingView: Number(document.getElementById('tsum-landingView').value)||0
   };
   document.querySelectorAll('[data-t-country]').forEach(inp=>{
     const c = inp.dataset.tCountry, m = inp.dataset.tMedia, f = inp.dataset.tField;
