@@ -128,10 +128,13 @@
   .card.card-comment{background:var(--surface-2);}
   .card.card-comment::before{background:linear-gradient(90deg, var(--ap-blue-400), var(--ap-blue-400));}
 
-  .editor-toolbar{display:none; gap:4px; margin-bottom:8px;}
+  .editor-toolbar{display:none; gap:4px; margin-bottom:8px; align-items:center; flex-wrap:wrap;}
   .comment-wrap:focus-within .editor-toolbar{display:flex;}
   .editor-toolbar button{border:1px solid var(--border); background:var(--surface); border-radius:6px; width:28px; height:28px; font-size:12px; font-weight:700;}
   .editor-toolbar select{border:1px solid var(--border); border-radius:6px; font-size:11.5px; padding:2px 4px;}
+  .editor-toolbar .fontsize-input{border:1px solid var(--border); border-radius:6px; font-size:11.5px; padding:4px; height:28px; box-sizing:border-box;}
+  .editor-toolbar .highlight-input{border:1px solid var(--border); border-radius:6px; width:28px; height:28px; padding:2px; box-sizing:border-box; background:var(--surface);}
+  .editor-toolbar .editor-sep{width:1px; height:20px; background:var(--border); margin:0 2px;}
   .comment-box{min-height:70px; border:1px solid var(--border); border-radius:8px; padding:12px 14px; font-size:14.5px; line-height:1.6; outline:none; background:#fff;}
   .comment-box:focus{border-color:var(--primary);}
   .comment-box:empty:before{content:attr(data-placeholder); color:var(--text-faint);}
@@ -814,27 +817,74 @@ function buildCommentEditor(key, placeholder){
   <div class="comment-wrap">
     <div class="editor-toolbar">
       <button type="button" data-cmd="bold" title="굵게"><b>B</b></button>
-      <select data-cmd="fontSize" title="글씨 크기">
-        <option value="2">작게</option><option value="3" selected>보통</option>
-        <option value="5">크게</option><option value="7">아주 크게</option>
-      </select>
+      <button type="button" data-cmd="italic" title="기울임"><i>I</i></button>
+      <button type="button" data-cmd="underline" title="밑줄"><u>U</u></button>
+      <span class="editor-sep"></span>
+      <input type="number" class="fontsize-input" title="글자 크기(px)" placeholder="크기" min="8" max="72" style="width:44px;">
+      <input type="color" class="highlight-input" title="하이라이트" value="#FFF3A0">
+      <span class="editor-sep"></span>
+      <button type="button" data-cmd="insertOrderedList" title="번호 매기기">1.</button>
+      <button type="button" data-cmd="insertUnorderedList" title="글머리 기호">•</button>
+      <button type="button" data-cmd="indent" title="들여쓰기">⇥</button>
+      <button type="button" data-cmd="outdent" title="내어쓰기">⇤</button>
     </div>
     <div class="comment-box" contenteditable="true" data-comment-key="${key}" data-placeholder="${esc(placeholder||'코멘트를 입력하세요...')}">${html}</div>
   </div>`;
 }
+// 툴바의 숫자입력/색상입력을 클릭하면 포커스가 그쪽으로 넘어가면서 comment-box의 선택 영역이
+// 풀릴 수 있어서, mousedown 시점에 선택 범위를 저장해두고 명령 실행 직전에 복원한다.
+let savedEditorRange = null, savedEditorBox = null;
+function saveEditorSelection(box){
+  const sel = window.getSelection();
+  if(sel.rangeCount>0 && box.contains(sel.anchorNode)){
+    savedEditorRange = sel.getRangeAt(0).cloneRange();
+    savedEditorBox = box;
+  }
+}
+function restoreEditorSelection(box){
+  box.focus();
+  if(savedEditorRange && savedEditorBox===box){
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(savedEditorRange);
+  }
+}
+document.addEventListener('mousedown', e=>{
+  if(VIEW_MODE) return;
+  const toolbar = e.target.closest('.editor-toolbar');
+  if(!toolbar) return;
+  const box = toolbar.closest('.card').querySelector('.comment-box');
+  if(box) saveEditorSelection(box);
+});
 document.addEventListener('click', e=>{
   if(VIEW_MODE) return;
   const btn = e.target.closest('.editor-toolbar button');
   if(!btn) return;
   const box = btn.closest('.card').querySelector('.comment-box');
-  box.focus(); document.execCommand(btn.dataset.cmd,false,null);
+  restoreEditorSelection(box);
+  document.execCommand(btn.dataset.cmd,false,null);
 });
 document.addEventListener('change', e=>{
   if(VIEW_MODE) return;
-  const sel = e.target.closest('.editor-toolbar select[data-cmd="fontSize"]');
-  if(!sel) return;
-  const box = sel.closest('.card').querySelector('.comment-box');
-  box.focus(); document.execCommand('fontSize', false, sel.value);
+  const sizeInput = e.target.closest('.editor-toolbar .fontsize-input');
+  if(sizeInput){
+    if(!sizeInput.value) return;
+    const box = sizeInput.closest('.card').querySelector('.comment-box');
+    restoreEditorSelection(box);
+    // execCommand의 fontSize는 1~7 legacy 스케일만 받아서, 일단 <font size="7">로 감싼 뒤
+    // 그 태그를 찾아 size 속성을 지우고 원하는 px로 바꿔치기해서 숫자 지정을 구현한다.
+    document.execCommand('fontSize', false, '7');
+    box.querySelectorAll('font[size="7"]').forEach(el=>{ el.removeAttribute('size'); el.style.fontSize = sizeInput.value+'px'; });
+    box.dispatchEvent(new Event('input', {bubbles:true})); // execCommand 이후의 직접 DOM 수정은 input 이벤트가 안 뜨므로 수동 발생
+    return;
+  }
+  const colorInput = e.target.closest('.editor-toolbar .highlight-input');
+  if(colorInput){
+    const box = colorInput.closest('.card').querySelector('.comment-box');
+    restoreEditorSelection(box);
+    document.execCommand('hiliteColor', false, colorInput.value);
+    return;
+  }
 });
 document.addEventListener('input', e=>{
   if(VIEW_MODE) return;
