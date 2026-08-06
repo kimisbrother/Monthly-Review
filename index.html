@@ -437,6 +437,12 @@ function toDateInput(d){ if(!(d instanceof Date)||isNaN(d)) return ''; return d.
 // 문자열 정렬 대신, 끝에 붙은 숫자를 숫자값으로 비교 — "Ads9"가 "Ads17"보다 뒤로 안 밀리게
 function naturalSort(arr){ return arr.slice().sort((a,b)=>String(a).localeCompare(String(b), undefined, {numeric:true, sensitivity:'base'})); }
 function uniqueVals(rows,col){ const s=new Set(); rows.forEach(r=>{ const v=r[col]; if(v!==undefined&&v!==null&&v!=='') s.add(String(v)); }); return naturalSort(Array.from(s)); }
+// 미디어믹스 Target의 "참고 월" 선택지 — 원본 데이터 전체(기간 필터 무관)에서 실제로 존재하는 월만 나열한다
+function availableMonths(){
+  const months = new Set();
+  RAWROWS.forEach(r=>{ const d=getDate(r); if(d) months.add(toDateInput(d).slice(0,7)); });
+  return Array.from(months).sort();
+}
 
 function inRange(row, range){
   if(!range || (!range.start && !range.end)) return true;
@@ -1731,38 +1737,75 @@ function buildMappingUI(headers){
     return `<div class="field"><label>${f.label}</label><select data-map="${f.key}">${opts}</select></div>`;
   }).join('');
 }
+// 참고 월(yearMonth)의 실제 데이터로 CPM/CTR/CPC/VTR/LPV 입력칸을 채운다. filterFn으로 국가/매체 범위를 좁힐 수 있다.
+function fillRefMonthFields(yearMonth, filterFn, fieldEls){
+  const rows = RAWROWS.filter(r=>{ const d=getDate(r); return d && toDateInput(d).slice(0,7)===yearMonth && (!filterFn || filterFn(r)); });
+  const a = aggregate(rows);
+  if(fieldEls.cpm) fieldEls.cpm.value = Math.round(a.cpm);
+  if(fieldEls.ctr) fieldEls.ctr.value = (a.ctr*100).toFixed(2);
+  if(fieldEls.cpc) fieldEls.cpc.value = Math.round(a.cpc);
+  if(fieldEls.vtr) fieldEls.vtr.value = (a.vtr*100).toFixed(2);
+  if(fieldEls.landingView) fieldEls.landingView.value = Math.round(a.landingView);
+}
+function monthSelectOptions(months, selected){
+  return ['<option value="">-- 월 선택 --</option>'].concat(
+    months.map(m=>`<option value="${m}" ${selected===m?'selected':''}>${m}</option>`)
+  ).join('');
+}
 function buildTargetSummaryUI(){
   const t = STATE.targets.summary;
+  const months = availableMonths();
+  const actualBudget = aggregate(baseRows()).spent;
   document.getElementById('targetSummaryGrid').innerHTML = `
+    <div class="field" style="margin-bottom:8px;">
+      <label style="font-size:11px; font-weight:600;">참고 월 — CPM·CTR·CPC·VTR·LPV 자동 불러오기</label>
+      <select id="tsum-refMonth" style="width:100%; padding:6px; border:1px solid var(--border); border-radius:6px; font-size:12px;">${monthSelectOptions(months, t.refMonth)}</select>
+    </div>
     <div class="target-header"><span class="spacer"></span><span>Budget</span><span>CPM</span><span>CTR(%)</span><span>CPC</span><span>VTR(%)</span><span>LP View</span></div>
     <div class="target-row-grid">
       <div class="trg-label">Target</div>
-      <input type="number" id="tsum-budget" value="${t.budget||0}">
+      <input type="number" id="tsum-budget" value="${actualBudget||0}">
       <input type="number" id="tsum-cpm" value="${t.cpm||0}">
       <input type="number" step="0.01" id="tsum-ctr" value="${t.ctr||0}">
       <input type="number" id="tsum-cpc" value="${t.cpc||0}">
       <input type="number" step="0.01" id="tsum-vtr" value="${t.vtr||0}">
       <input type="number" id="tsum-landingView" value="${t.landingView||0}">
     </div>
-    <div class="desc">Impression/Click/View는 CPM·CPC(우선)·CTR·VTR로부터 자동 역산돼요.</div>`;
+    <div class="desc">Budget는 지정한 기간의 실집행 광고비로 자동 채워져요. Impression/Click/View는 CPM·CPC(우선)·CTR·VTR로부터 자동 역산돼요.</div>`;
+  document.getElementById('tsum-refMonth').addEventListener('change', e=>{
+    if(!e.target.value) return;
+    fillRefMonthFields(e.target.value, null, {
+      cpm: document.getElementById('tsum-cpm'), ctr: document.getElementById('tsum-ctr'),
+      cpc: document.getElementById('tsum-cpc'), vtr: document.getElementById('tsum-vtr'),
+      landingView: document.getElementById('tsum-landingView')
+    });
+  });
 }
 function buildTargetCountryUI(){
   const countries = uniqueCountries();
   const grid = document.getElementById('targetCountryGrid');
   if(countries.length===0){ grid.innerHTML='<div class="desc">데이터 연결 후 국가가 표시됩니다.</div>'; return; }
-  const mediaCol = CONFIG.fieldMap.media;
+  const mediaCol = CONFIG.fieldMap.media, countryCol = CONFIG.fieldMap.country;
+  const months = availableMonths();
+  const allBaseRows = baseRows();
   grid.innerHTML = countries.map(country=>{
     const cKey = country.replace(/[^a-zA-Z0-9]/g,'_');
     const medias = mediaCol ? uniqueVals(RAWROWS.filter(r=>String(r[CONFIG.fieldMap.country])===country), mediaCol) : ['Meta','TikTok'];
     const t = STATE.targets.country[country] || {};
     const od = STATE.optDates[country] || {};
+    const countryRows = allBaseRows.filter(r=>String(r[countryCol])===country);
     const mediaRows = medias.map(media=>{
       const mk = media.toLowerCase();
       const mt = t[mk] || {};
-      return `<div class="target-header"><span class="spacer"></span><span>Budget</span><span>CPM</span><span>CTR(%)</span><span>CPC</span><span>VTR(%)</span><span>LP View</span></div>
+      const actualBudget = aggregate(countryRows.filter(r=>String(r[mediaCol])===media)).spent;
+      return `<div class="field" style="margin-top:6px; margin-bottom:2px;">
+        <label style="font-weight:500; font-size:11px;">${esc(media)} 참고 월 — 자동 불러오기</label>
+        <select data-refmonth-country="${cKey}" data-refmonth-media="${mk}" style="width:100%; padding:5px; border:1px solid var(--border); border-radius:6px; font-size:11.5px;">${monthSelectOptions(months, mt.refMonth)}</select>
+      </div>
+      <div class="target-header"><span class="spacer"></span><span>Budget</span><span>CPM</span><span>CTR(%)</span><span>CPC</span><span>VTR(%)</span><span>LP View</span></div>
       <div class="target-row-grid">
         <div class="trg-label">${esc(media)}</div>
-        <input type="number" data-t-country="${cKey}" data-t-media="${mk}" data-t-field="budget" value="${mt.budget||0}">
+        <input type="number" data-t-country="${cKey}" data-t-media="${mk}" data-t-field="budget" value="${actualBudget||0}">
         <input type="number" data-t-country="${cKey}" data-t-media="${mk}" data-t-field="cpm" value="${mt.cpm||0}">
         <input type="number" step="0.01" data-t-country="${cKey}" data-t-media="${mk}" data-t-field="ctr" value="${mt.ctr||0}">
         <input type="number" data-t-country="${cKey}" data-t-media="${mk}" data-t-field="cpc" value="${mt.cpc||0}">
@@ -1778,6 +1821,17 @@ function buildTargetCountryUI(){
     </div>`;
   }).join('');
 }
+document.addEventListener('change', e=>{
+  const sel = e.target.closest('[data-refmonth-country]');
+  if(!sel || !sel.value) return;
+  const cKey = sel.dataset.refmonthCountry, mk = sel.dataset.refmonthMedia;
+  const countryName = uniqueCountries().find(x=>x.replace(/[^a-zA-Z0-9]/g,'_')===cKey) || cKey;
+  const countryCol = CONFIG.fieldMap.country, mediaCol = CONFIG.fieldMap.media;
+  const field = f => document.querySelector(`[data-t-country="${cKey}"][data-t-media="${mk}"][data-t-field="${f}"]`);
+  fillRefMonthFields(sel.value, r=>String(r[countryCol])===countryName && String(r[mediaCol]).toLowerCase()===mk, {
+    cpm: field('cpm'), ctr: field('ctr'), cpc: field('cpc'), vtr: field('vtr'), landingView: field('landingView')
+  });
+});
 document.getElementById('testConnBtn').addEventListener('click', async ()=>{
   const url = document.getElementById('cfg-csvUrl').value.trim();
   const status = document.getElementById('connStatus');
@@ -1822,7 +1876,8 @@ document.getElementById('modalSave').addEventListener('click', ()=>{
     ctr: Number(document.getElementById('tsum-ctr').value)||0,
     cpc: Number(document.getElementById('tsum-cpc').value)||0,
     vtr: Number(document.getElementById('tsum-vtr').value)||0,
-    landingView: Number(document.getElementById('tsum-landingView').value)||0
+    landingView: Number(document.getElementById('tsum-landingView').value)||0,
+    refMonth: document.getElementById('tsum-refMonth').value
   };
   document.querySelectorAll('[data-t-country]').forEach(inp=>{
     const c = inp.dataset.tCountry, m = inp.dataset.tMedia, f = inp.dataset.tField;
@@ -1830,6 +1885,13 @@ document.getElementById('modalSave').addEventListener('click', ()=>{
     if(!STATE.targets.country[countryName]) STATE.targets.country[countryName] = {};
     if(!STATE.targets.country[countryName][m]) STATE.targets.country[countryName][m] = {};
     STATE.targets.country[countryName][m][f] = Number(inp.value)||0;
+  });
+  document.querySelectorAll('[data-refmonth-country]').forEach(sel=>{
+    const c = sel.dataset.refmonthCountry, m = sel.dataset.refmonthMedia;
+    const countryName = uniqueCountries().find(x=>x.replace(/[^a-zA-Z0-9]/g,'_')===c) || c;
+    if(!STATE.targets.country[countryName]) STATE.targets.country[countryName] = {};
+    if(!STATE.targets.country[countryName][m]) STATE.targets.country[countryName][m] = {};
+    STATE.targets.country[countryName][m].refMonth = sel.value;
   });
   document.querySelectorAll('[data-opt-country]').forEach(inp=>{
     const c = inp.dataset.optCountry, m = inp.dataset.optMedia;
