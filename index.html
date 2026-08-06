@@ -887,7 +887,8 @@ async function setSlotImage(slotKey, file){
   const imgKey = canonicalImgKey(slotKey);
   imageCache[imgKey] = dataUrl;
   STATE.images[slotKey] = imgKey;
-  if(CONFIG.appsScriptUrl) fetch(CONFIG.appsScriptUrl, {method:'POST', body:JSON.stringify({action:'saveImage', key:imgKey, data:dataUrl})}).catch(()=>{});
+  // saveReport와 같은 이유(Apps Script POST 응답에 CORS 헤더 없음)로 no-cors 사용 — 업로드 자체는 그대로 진행된다.
+  if(CONFIG.appsScriptUrl) fetch(CONFIG.appsScriptUrl, {method:'POST', mode:'no-cors', body:JSON.stringify({action:'saveImage', key:imgKey, data:dataUrl})}).catch(()=>{});
   renderCurrentTab();
 }
 function buildImgSlot(slotKey, legacyKey, extraClass){
@@ -1545,9 +1546,16 @@ async function saveStateToServer(){
   }
   btn.disabled=true; btn.innerHTML='<span class="spin">☁️</span> 저장 중...';
   try{
-    const res = await fetch(CONFIG.appsScriptUrl, {method:'POST', body:JSON.stringify({action:'saveReport', name, previousName, state:STATE})});
-    const json = await res.json().catch(()=>({ok:true}));
-    if(json.ok===false) throw new Error(json.error||'저장 실패');
+    // Apps Script 웹앱은 POST 응답에 CORS 헤더를 안 붙여서(구글 앱스크립트의 알려진 한계) 브라우저가
+    // 응답을 못 읽는다 — 다만 이건 "응답 읽기"만 막는 거라, Content-Type이 simple(text/plain)이라
+    // 프리플라이트 없이 요청 자체는 서버에 도달해 실제로 실행된다. no-cors로 보내 저장은 그대로
+    // 진행시키고, 실제로 반영됐는지는 CORS가 잘 되는 GET(getReport)으로 다시 확인해서 판단한다.
+    await fetch(CONFIG.appsScriptUrl, {method:'POST', mode:'no-cors', body:JSON.stringify({action:'saveReport', name, previousName, state:STATE})});
+    const verifyRes = await fetch(CONFIG.appsScriptUrl+'?action=getReport&name='+encodeURIComponent(name));
+    const verifyJson = await verifyRes.json();
+    if(!verifyJson.ok) throw new Error('저장 확인 실패: '+(verifyJson.error||'해당 이름의 리포트를 찾을 수 없어요.'));
+    const savedMsAgo = verifyJson.savedAt ? Date.now() - new Date(verifyJson.savedAt).getTime() : Infinity;
+    if(savedMsAgo > 20000) throw new Error('저장이 아직 반영되지 않았어요. 잠시 후 다시 시도해주세요.');
     loadedReportName = name;
     showBanner(previousName
       ? `"${previousName}"를 "${name}"로 이름을 바꿔서 저장했어요.`
