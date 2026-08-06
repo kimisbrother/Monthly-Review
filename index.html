@@ -35,7 +35,7 @@
   }
   button{font-family:inherit; cursor:pointer;}
   input,select,textarea{font-family:var(--font-sans);}
-  .page-shell{max-width:1640px; margin:0 auto; padding:0 24px 48px;}
+  .page-shell{max-width:1880px; margin:0 auto; padding:0 24px 48px;}
   body.view-mode [contenteditable]{cursor:default;}
   body.view-mode .editor-toolbar{display:none !important;}
   body.view-mode .img-slot{cursor:default;}
@@ -51,13 +51,13 @@
   }
   .header-panel::before{content:''; display:block; height:4px; background:linear-gradient(90deg, var(--ap-blue-700), var(--ap-blue-400));}
   .topbar{
-    padding:24px 28px 20px; display:flex; align-items:flex-end; justify-content:space-between; gap:16px; flex-wrap:wrap;
+    padding:16px 24px 12px; display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;
   }
-  .kicker{font-size:10.5px; font-weight:700; color:var(--ap-blue-700); letter-spacing:0.22em; margin-bottom:9px;}
-  .topbar-title h1{font-size:34px; font-weight:800; margin:0; letter-spacing:-0.01em; color:var(--primary); font-family:var(--font-sans);}
-  .period{display:flex; align-items:baseline; gap:9px; margin-top:14px; padding-top:12px; border-top:1px solid var(--border);}
-  .period-label{font-size:10.5px; font-weight:700; color:var(--text-faint); letter-spacing:0.1em;}
-  .period-value{font-size:13.5px; font-weight:700; color:var(--ap-blue-700); letter-spacing:0.01em;}
+  .topbar-title{display:flex; align-items:baseline; gap:14px; flex-wrap:wrap; row-gap:4px;}
+  .topbar-title h1{font-size:20px; font-weight:700; margin:0; letter-spacing:-0.01em; color:var(--primary); font-family:var(--font-sans);}
+  .period{display:flex; align-items:baseline; gap:7px;}
+  .period-label{font-size:10px; font-weight:700; color:var(--text-faint); letter-spacing:0.08em;}
+  .period-value{font-size:12.5px; font-weight:700; color:var(--ap-blue-700); letter-spacing:0.01em;}
   .topbar-controls{display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
   .gear-btn{
     width:36px; height:36px; border-radius:50%; border:1px solid var(--border);
@@ -90,8 +90,8 @@
   .banner.error{background:var(--bad-tint); color:#8f2323;}
   .banner.ok{background:var(--good-tint); color:#0a5a3f;}
 
-  .tabs{display:flex; gap:5px; padding:10px 20px 0; background:var(--surface-2); border-top:1px solid var(--border); overflow-x:auto;}
-  .tab-btn{position:relative; top:2px; border:none; background:transparent; padding:11px 18px; font-size:13px; font-weight:600; color:var(--text-faint); white-space:nowrap; border-radius:10px 10px 0 0; transition:all .15s ease;}
+  .tabs{display:flex; gap:5px; padding:8px 20px 0; background:var(--surface-2); border-top:1px solid var(--border); overflow-x:auto;}
+  .tab-btn{position:relative; top:2px; border:none; background:transparent; padding:9px 16px; font-size:13px; font-weight:600; color:var(--text-faint); white-space:nowrap; border-radius:10px 10px 0 0; transition:all .15s ease;}
   .tab-btn:hover{color:var(--text); background:rgba(255,255,255,0.55);}
   .tab-btn.active{top:0; color:var(--ap-blue-900); background:var(--surface); font-weight:800; box-shadow:0 -3px 10px rgba(0,28,88,0.06);}
   .tab-btn.active::after{content:''; position:absolute; left:14px; right:14px; bottom:-1px; height:2px; border-radius:2px; background:linear-gradient(90deg,var(--ap-blue-700),var(--ap-blue-400));}
@@ -132,7 +132,7 @@
   .comment-wrap:focus-within .editor-toolbar{display:flex;}
   .editor-toolbar button{border:1px solid var(--border); background:var(--surface); border-radius:6px; width:28px; height:28px; font-size:12px; font-weight:700;}
   .editor-toolbar select{border:1px solid var(--border); border-radius:6px; font-size:11.5px; padding:2px 4px;}
-  .comment-box{min-height:70px; border:1px solid var(--border); border-radius:8px; padding:10px 12px; font-size:13px; outline:none; background:#fff;}
+  .comment-box{min-height:70px; max-width:900px; border:1px solid var(--border); border-radius:8px; padding:10px 12px; font-size:13px; outline:none; background:#fff;}
   .comment-box:focus{border-color:var(--primary);}
   .comment-box:empty:before{content:attr(data-placeholder); color:var(--text-faint);}
 
@@ -239,7 +239,6 @@
 <div class="header-panel">
   <div class="topbar">
     <div class="topbar-title">
-      <div class="kicker">MONTHLY PERFORMANCE REPORT</div>
       <h1>월간 리뷰 대시보드</h1>
       <div class="period"><span class="period-label">리포트 기간</span><span class="period-value" id="dateRangeLabel">불러오는 중...</span></div>
     </div>
