@@ -320,6 +320,14 @@
           </div>
         </details>
         <details class="settings-collapse">
+          <summary>포함할 캠페인 (7일 미만 집행)</summary>
+          <div class="field" style="margin-top:8px;">
+            <div class="desc">여기 보이는 캠페인은 선택한 기간 기준 7일 미만 집행돼 자동으로 집계에서 빠진 캠페인이에요. 광고주 요청 등으로 의도적으로 짧게 운영한 캠페인이라면 체크해서 집계에 다시 포함시킬 수 있어요.</div>
+            <input type="text" id="includeCampaignSearchInput" placeholder="🔍 캠페인 검색" style="width:100%; padding:7px 9px; border:1px solid var(--border); border-radius:8px; font-size:12.5px; margin-bottom:6px;">
+            <div class="excl-checklist" id="includeCampaignList"></div>
+          </div>
+        </details>
+        <details class="settings-collapse">
           <summary>제외할 광고그룹</summary>
           <div class="field" style="margin-top:8px;">
             <div class="desc">선택한 기간 기준 7일 이상 데이터가 집계된 광고그룹만 표시돼요.</div>
@@ -391,7 +399,7 @@ const REQUIRED_FIELDS = [
 
 let RAWROWS = [], RAWHEADERS = [];
 let STATE = {
-  dateRange:{start:'',end:''}, excludedCampaigns:[], excludedAdGroups:[], tableTitles:{}, comments:{}, highlights:{},
+  dateRange:{start:'',end:''}, excludedCampaigns:[], excludedAdGroups:[], includedShortCampaigns:[], tableTitles:{}, comments:{}, highlights:{},
   cardHighlights:{}, images:{},
   targets:{ summary:{budget:0,cpm:0,ctr:0,cpc:0,vtr:0,landingView:0}, country:{} },
   optDates:{}, lessonBlocks:[]
@@ -403,6 +411,7 @@ function ensureStateShape(){
   STATE.dateRange = STATE.dateRange || {start:'',end:''};
   STATE.excludedCampaigns = STATE.excludedCampaigns || [];
   STATE.excludedAdGroups = STATE.excludedAdGroups || [];
+  STATE.includedShortCampaigns = STATE.includedShortCampaigns || [];
   STATE.tableTitles = STATE.tableTitles || {};
   STATE.comments = STATE.comments || {};
   STATE.highlights = STATE.highlights || {};
@@ -445,11 +454,13 @@ function baseRows(opts){
   const hasRange = !!(range && (range.start || range.end));
   // 기간을 지정하면, 그 기간 기준으로 유효 집행(7일 이상) 캠페인 목록에 속한 캠페인만 집계에 포함하고
   // 나머지(경계에 살짝 걸친 캠페인 등)는 자동으로 제외한다. 체크박스 제외는 이 목록 안에서 추가로 뺀다.
+  // 광고주 요청 등으로 의도적으로 짧게(7일 미만) 운영한 캠페인은 설정에서 개별적으로 다시 포함시킬 수 있다
+  // (STATE.includedShortCampaigns) — 그 목록에 있으면 7일 미만이어도 eligibleCamps 체크를 건너뛴다.
   // 단, opts.skipEligibility가 true면(예: 차트의 시작/종료 마커) 이 제한을 적용하지 않는다 —
   // 짧게 집행된 캠페인도 타임라인에는 표시돼야 하기 때문.
   const eligibleCamps = (hasRange && campCol && !opts.skipEligibility) ? new Set(eligibleForExclusion(campCol, range)) : null;
   return RAWROWS.filter(r => inRange(r, range)
-    && (!eligibleCamps || eligibleCamps.has(String(r[campCol])))
+    && (!eligibleCamps || eligibleCamps.has(String(r[campCol])) || STATE.includedShortCampaigns.includes(String(r[campCol])))
     && !(campCol && STATE.excludedCampaigns.includes(String(r[campCol])))
     && !(agCol && STATE.excludedAdGroups.includes(String(r[agCol]))));
 }
@@ -465,6 +476,15 @@ function eligibleForExclusion(col, range){
   const eligible = [];
   groups.forEach((rows, key)=>{ if(key!=='(빈값)' && daysCount(rows) >= 7) eligible.push(key); });
   return naturalSort(eligible);
+}
+// eligibleForExclusion의 반대 — 7일 미만이라 자동 제외된 캠페인 목록. "포함할 캠페인" 체크리스트에 쓰인다.
+function ineligibleForInclusion(col, range){
+  if(!col) return [];
+  const rangeRows = RAWROWS.filter(r=>inRange(r, range));
+  const groups = groupBy(rangeRows, col);
+  const ineligible = [];
+  groups.forEach((rows, key)=>{ if(key!=='(빈값)' && daysCount(rows) < 7) ineligible.push(key); });
+  return naturalSort(ineligible);
 }
 function countriesBySpend(){
   const countryCol = CONFIG.fieldMap.country;
@@ -1132,6 +1152,7 @@ function renderSummaryTab(){
     <div style="font-size:11.5px; color:var(--text-faint); margin-top:12px;">
       적용된 필터 — 기간: <b>${STATE.dateRange.start||'전체'} ~ ${STATE.dateRange.end||'전체'}</b> ·
       제외 캠페인 <b>${STATE.excludedCampaigns.length}</b>개 · 제외 광고그룹 <b>${STATE.excludedAdGroups.length}</b>개 ·
+      7일 미만 포함 캠페인 <b>${STATE.includedShortCampaigns.length}</b>개 ·
       전체 ${RAWROWS.length.toLocaleString()}행 중 <b>${rows.length.toLocaleString()}</b>행 반영
     </div>
   </div>`;
@@ -1500,16 +1521,22 @@ function renderExclusionCheckboxes(){
   const campCol = CONFIG.fieldMap.campaign, agCol = CONFIG.fieldMap.adGroup;
   const camps = eligibleForExclusion(campCol, rangeEl);
   const groups = eligibleForExclusion(agCol, rangeEl);
+  const shortCamps = ineligibleForInclusion(campCol, rangeEl);
   const campBox = document.getElementById('excludeCampaignList');
   const agBox = document.getElementById('excludeAdGroupList');
+  const inclBox = document.getElementById('includeCampaignList');
   campBox.innerHTML = camps.length ? camps.map(c=>
     `<label><input type="checkbox" data-excl-campaign value="${esc(c)}" ${STATE.excludedCampaigns.includes(c)?'checked':''}> ${esc(c)}</label>`).join('')
     : '<div class="desc">7일 이상 집계된 캠페인이 없어요 (또는 Campaign 컬럼 매핑 필요).</div>';
   agBox.innerHTML = groups.length ? groups.map(g=>
     `<label><input type="checkbox" data-excl-adgroup value="${esc(g)}" ${STATE.excludedAdGroups.includes(g)?'checked':''}> ${esc(g)}</label>`).join('')
     : '<div class="desc">7일 이상 집계된 광고그룹이 없어요 (또는 Ad Group 컬럼 매핑 필요).</div>';
+  inclBox.innerHTML = shortCamps.length ? shortCamps.map(c=>
+    `<label><input type="checkbox" data-incl-campaign value="${esc(c)}" ${STATE.includedShortCampaigns.includes(c)?'checked':''}> ${esc(c)}</label>`).join('')
+    : '<div class="desc">7일 미만으로 집행된 캠페인이 없어요.</div>';
   applyExclSearch('excludeCampaignList', document.getElementById('excludeCampaignSearchInput').value);
   applyExclSearch('excludeAdGroupList', document.getElementById('excludeAdGroupSearchInput').value);
+  applyExclSearch('includeCampaignList', document.getElementById('includeCampaignSearchInput').value);
   // 자동 목록(체크박스)에 없는, 직접 입력으로 추가한 제외 항목은 삭제 가능한 태그로 보여준다
   const campSet = new Set(camps), groupSet = new Set(groups);
   document.getElementById('excludeCampaignManualTags').innerHTML = STATE.excludedCampaigns.filter(c=>!campSet.has(c))
@@ -1527,6 +1554,7 @@ document.getElementById('cfg-rangeStart').addEventListener('change', renderExclu
 document.getElementById('cfg-rangeEnd').addEventListener('change', renderExclusionCheckboxes);
 document.getElementById('excludeCampaignSearchInput').addEventListener('input', e=>applyExclSearch('excludeCampaignList', e.target.value));
 document.getElementById('excludeAdGroupSearchInput').addEventListener('input', e=>applyExclSearch('excludeAdGroupList', e.target.value));
+document.getElementById('includeCampaignSearchInput').addEventListener('input', e=>applyExclSearch('includeCampaignList', e.target.value));
 document.getElementById('excludeCampaignManualAdd').addEventListener('click', ()=>{
   const inp = document.getElementById('excludeCampaignManualInput');
   const v = inp.value.trim();
@@ -1688,6 +1716,9 @@ document.getElementById('modalSave').addEventListener('click', ()=>{
   const agCheckboxVals = Array.from(document.querySelectorAll('[data-excl-adgroup]')).map(el=>el.value);
   const checkedAg = Array.from(document.querySelectorAll('[data-excl-adgroup]:checked')).map(el=>el.value);
   STATE.excludedAdGroups = Array.from(new Set([...checkedAg, ...STATE.excludedAdGroups.filter(g=>!agCheckboxVals.includes(g))]));
+  const inclCheckboxVals = Array.from(document.querySelectorAll('[data-incl-campaign]')).map(el=>el.value);
+  const checkedIncl = Array.from(document.querySelectorAll('[data-incl-campaign]:checked')).map(el=>el.value);
+  STATE.includedShortCampaigns = Array.from(new Set([...checkedIncl, ...STATE.includedShortCampaigns.filter(c=>!inclCheckboxVals.includes(c))]));
 
   STATE.targets.summary = {
     budget: Number(document.getElementById('tsum-budget').value)||0,
