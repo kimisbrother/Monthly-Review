@@ -321,7 +321,7 @@
         <details class="settings-collapse">
           <summary>자동 필터 예외 처리 (7일 미만 집행 · 재라이브 감지)</summary>
           <div class="field" style="margin-top:8px;">
-            <div class="desc">아래는 자동 필터 때문에 집계에서 빠진 항목들이에요 — "7일 미만"은 선택 기간 기준 7일 미만 집행된 캠페인, "재라이브 감지"는 같은 이름의 광고그룹이 3일 넘게 쉬었다가 다시 시작해 이전 구간이 잘려나간 경우예요. 의도된 것이 맞다면 체크해서 다시 포함시킬 수 있어요.</div>
+            <div class="desc">아래는 자동 필터 때문에 집계에서 빠진 항목들이에요 — "7일 미만"은 선택 기간 기준 7일 미만 집행된 캠페인, "재라이브 감지"는 같은 이름의 광고그룹이 3일 넘게 쉬었다가 다시 시작해 재라이브 이후 구간(보통 다음 리뷰에 속하는 신규 라운드)이 잘려나간 경우예요. 재라이브분까지 포함해서 보고 싶다면 체크해서 다시 포함시킬 수 있어요.</div>
             <input type="text" id="includeCampaignSearchInput" placeholder="🔍 캠페인/광고그룹 검색" style="width:100%; padding:7px 9px; border:1px solid var(--border); border-radius:8px; font-size:12.5px; margin-bottom:6px;">
             <div class="excl-checklist" id="includeCampaignList"></div>
           </div>
@@ -445,22 +445,23 @@ function inRange(row, range){
   if(range.end){ const end=new Date(range.end); end.setHours(23,59,59,999); if(d>end) return false; }
   return true;
 }
-// 같은 이름으로 재라이브된 광고그룹 대응: 이름별로 실집행일을 나열해 CAMPAIGN_RELAUNCH_GAP_DAYS일 넘게
-// 공백(무집행)이 있으면 그 뒤를 새 구간으로 보고, 가장 최근 연속 구간의 시작일만 남긴다.
+// 같은 이름으로 재라이브된 광고그룹 대응: 리뷰 기간은 "원래 운영분"만 집계해야 하므로, 이름별로 실집행일을
+// 나열해 CAMPAIGN_RELAUNCH_GAP_DAYS일 넘게 공백(무집행)이 있으면 그 뒤를 재라이브 구간으로 보고 잘라내고,
+// 가장 처음(원래) 연속 구간의 마지막 날짜까지만 남긴다. 재라이브분은 보통 다음 리뷰 기간에 속하는 신규 라운드다.
 // 정상적인 주말/휴일 소진 없음은 보통 1~2일이라 3일 기준이면 오탐 없이 넘어간다.
 // 캠페인이 아니라 광고그룹 단위로 본다 — Partnership/Spark Ads는 여러 광고그룹이 하나의 공용
 // 캠페인 이름을 공유해서, 캠페인 단위로 보면 개별 광고그룹이 교체되며 생기는 정상적인 공백까지
 // "재라이브"로 오판해 그 안의 멀쩡한 광고그룹까지 함께 잘려나간다.
 const CAMPAIGN_RELAUNCH_GAP_DAYS = 3;
-// 리뷰 종료일 부근에 하루짜리 지연 트래킹 데이터만 뒤늦게 붙는 경우(정산 지연 등 흔한 현상)가 있어서,
-// 공백 뒤 새 구간이 이 값보다 짧으면(예: 단 하루) 재라이브가 아니라 노이즈로 보고 직전 구간에 합친다.
+// 구간 경계 부근에 하루짜리 지연/시험성 트래킹 데이터만 붙는 경우(정산 지연 등 흔한 현상)가 있어서,
+// 공백으로 갈라진 구간이 이 값보다 짧으면(예: 단 하루) 재라이브/원래 운영분이 아니라 노이즈로 보고 이웃 구간에 합친다.
 const CAMPAIGN_RELAUNCH_MIN_TRAILING_DAYS = 2;
 // 광고그룹 이름만으로 묶으면, 서로 다른 국가/캠페인이 우연히 같은 일반화된 광고그룹 이름을 쓰는 경우
 // (예: TikTok Spark Ads의 "Spark Ads21"이 PL·SE에 둘 다 존재 — Partnership Ads와 달리 국가 접두어가 없음)
 // 완전히 무관한 두 캠페인이 하나로 합쳐져서 그 사이 공백이 "재라이브"로 오판된다.
 // 그래서 캠페인+광고그룹 조합을 키로 묶어 서로 다른 캠페인이면 항상 별개로 취급한다.
-// 반환되는 Map은 "캠페인::광고그룹" 키로, 값에 원래 광고그룹 이름(agName)을 함께 담는다.
-function latestRunStartByName(rows, campCol, agCol){
+// 반환되는 Map은 "캠페인::광고그룹" 키로, 값에 원래 광고그룹 이름(agName)과 원래 구간의 마지막 날짜(end)를 담는다.
+function originalRunEndByName(rows, campCol, agCol){
   const groups = new Map();
   rows.forEach(r=>{
     const agName = agCol ? String(r[agCol]).trim() : '';
@@ -480,13 +481,13 @@ function latestRunStartByName(rows, campCol, agCol){
       if(diffDays > CAMPAIGN_RELAUNCH_GAP_DAYS) segments.push([dates[i]]);
       else segments[segments.length-1].push(dates[i]);
     }
-    // 마지막 구간이 너무 짧으면(지연 트래킹 노이즈) 재라이브로 보지 않고 직전 구간에 합친다
-    while(segments.length > 1 && segments[segments.length-1].length < CAMPAIGN_RELAUNCH_MIN_TRAILING_DAYS){
-      const last = segments.pop();
-      segments[segments.length-1] = segments[segments.length-1].concat(last);
+    // 맨 앞 구간이 너무 짧으면(시험성 노이즈) "원래 운영분"으로 보지 않고 다음 구간에 합친다
+    while(segments.length > 1 && segments[0].length < CAMPAIGN_RELAUNCH_MIN_TRAILING_DAYS){
+      const first = segments.shift();
+      segments[0] = first.concat(segments[0]);
     }
-    const lastSeg = segments[segments.length-1];
-    map.set(key, {agName, start:lastSeg[0], gapDetected: segments.length > 1});
+    const firstSeg = segments[0];
+    map.set(key, {agName, end:firstSeg[firstSeg.length-1], gapDetected: segments.length > 1});
   });
   return map;
 }
@@ -505,7 +506,7 @@ function baseRows(opts){
   const eligibleCamps = (hasRange && campCol && !opts.skipEligibility) ? new Set(eligibleForExclusion(campCol, range)) : null;
   // 재라이브 컷오프도 같은 이유로 skipEligibility에서는 건너뛴다. STATE.includedShortCampaigns에 있는 이름은
   // (7일 미만 예외와 같은 손잡이를 재사용해) 이 컷오프도 함께 건너뛰어, 오탐 시 사용자가 되살릴 수 있게 한다.
-  const runStartByAdGroup = (agCol && !opts.skipEligibility) ? latestRunStartByName(RAWROWS.filter(r=>inRange(r, range)), campCol, agCol) : null;
+  const runEndByAdGroup = (agCol && !opts.skipEligibility) ? originalRunEndByName(RAWROWS.filter(r=>inRange(r, range)), campCol, agCol) : null;
   return RAWROWS.filter(r => {
     if(!inRange(r, range)) return false;
     const campName = campCol ? String(r[campCol]) : null;
@@ -513,11 +514,11 @@ function baseRows(opts){
     if(eligibleCamps && !eligibleCamps.has(campName) && !STATE.includedShortCampaigns.includes(campName)) return false;
     if(campCol && STATE.excludedCampaigns.includes(campName)) return false;
     if(agCol && STATE.excludedAdGroups.includes(agName)) return false;
-    if(runStartByAdGroup && agName){
+    if(runEndByAdGroup && agName){
       const key = (campName||'')+'::'+agName;
-      if(runStartByAdGroup.has(key) && !STATE.includedShortCampaigns.includes(agName)){
+      if(runEndByAdGroup.has(key) && !STATE.includedShortCampaigns.includes(agName)){
         const d = getDate(r);
-        if(d && toDateInput(d) < runStartByAdGroup.get(key).start) return false;
+        if(d && toDateInput(d) > runEndByAdGroup.get(key).end) return false;
       }
     }
     return true;
@@ -545,11 +546,11 @@ function ineligibleForInclusion(col, range){
   groups.forEach((rows, key)=>{ if(key!=='(빈값)' && daysCount(rows) < 7) ineligible.push(key); });
   return naturalSort(ineligible);
 }
-// 재라이브 감지(latestRunStartByName)로 이전 구간이 잘려나간 광고그룹 이름 목록. "자동 필터 예외 처리" 체크리스트에 쓰인다.
+// 재라이브 감지(originalRunEndByName)로 재라이브 이후 구간이 잘려나간 광고그룹 이름 목록. "자동 필터 예외 처리" 체크리스트에 쓰인다.
 function gapAffectedAdGroups(campCol, agCol, range){
   if(!agCol) return [];
   const rangeRows = RAWROWS.filter(r=>inRange(r, range));
-  const runInfo = latestRunStartByName(rangeRows, campCol, agCol);
+  const runInfo = originalRunEndByName(rangeRows, campCol, agCol);
   const names = new Set();
   runInfo.forEach(info=>{ if(info.gapDetected) names.add(info.agName); });
   return naturalSort(Array.from(names));
@@ -1207,7 +1208,7 @@ function renderSummaryTab(){
   const brandCol=CONFIG.fieldMap.brand, countryCol=CONFIG.fieldMap.country, campaignCol=CONFIG.fieldMap.campaign, mediaCol=CONFIG.fieldMap.media;
   const ctCol=CONFIG.fieldMap.creativeType, adGroupCol=CONFIG.fieldMap.adGroup, objectiveCol=CONFIG.fieldMap.objective;
   const a = aggregate(rows);
-  const runInfo = adGroupCol ? latestRunStartByName(RAWROWS.filter(r=>inRange(r, STATE.dateRange)), campaignCol, adGroupCol) : new Map();
+  const runInfo = adGroupCol ? originalRunEndByName(RAWROWS.filter(r=>inRange(r, STATE.dateRange)), campaignCol, adGroupCol) : new Map();
   const relaunchCount = new Set(Array.from(runInfo.values()).filter(info=>info.gapDetected && !STATE.includedShortCampaigns.includes(info.agName)).map(info=>info.agName)).size;
   const displayKeyFn = buildSummaryDisplayKeyFn(rows, campaignCol, ctCol, adGroupCol, countryCol, true);
 
@@ -1222,7 +1223,7 @@ function renderSummaryTab(){
     <div style="font-size:11.5px; color:var(--text-faint); margin-top:12px;">
       적용된 필터 — 기간: <b>${STATE.dateRange.start||'전체'} ~ ${STATE.dateRange.end||'전체'}</b> ·
       제외 캠페인 <b>${STATE.excludedCampaigns.length}</b>개 · 제외 광고그룹 <b>${STATE.excludedAdGroups.length}</b>개 ·
-      7일 미만 포함 캠페인 <b>${STATE.includedShortCampaigns.length}</b>개 · 재라이브 감지로 이전 구간 제외된 광고그룹 <b>${relaunchCount}</b>개 ·
+      7일 미만 포함 캠페인 <b>${STATE.includedShortCampaigns.length}</b>개 · 재라이브 감지로 재라이브 이후 구간 제외된 광고그룹 <b>${relaunchCount}</b>개 ·
       전체 ${RAWROWS.length.toLocaleString()}행 중 <b>${rows.length.toLocaleString()}</b>행 반영
     </div>
   </div>`;
