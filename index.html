@@ -446,6 +446,26 @@ function inRange(row, range){
   if(range.end){ const end=new Date(range.end); end.setHours(23,59,59,999); if(d>end) return false; }
   return true;
 }
+// 같은 이름으로 재라이브된 캠페인 대응: 이름별로 실집행일을 나열해 CAMPAIGN_RELAUNCH_GAP_DAYS일 넘게
+// 공백(무집행)이 있으면 그 뒤를 새 구간으로 보고, 가장 최근 연속 구간의 시작일만 남긴다.
+// 정상적인 주말/휴일 소진 없음은 보통 1~2일이라 3일 기준이면 오탐 없이 넘어간다.
+const CAMPAIGN_RELAUNCH_GAP_DAYS = 3;
+function latestRunStartByName(rows, col){
+  const groups = groupBy(rows, col);
+  const map = new Map();
+  groups.forEach((grows, key)=>{
+    if(key==='(빈값)') return;
+    const dates = Array.from(new Set(grows.map(getDate).filter(Boolean).map(toDateInput))).sort();
+    if(dates.length===0) return;
+    let runStart = dates[0], gapDetected = false;
+    for(let i=1;i<dates.length;i++){
+      const diffDays = Math.round((new Date(dates[i]) - new Date(dates[i-1])) / 86400000);
+      if(diffDays > CAMPAIGN_RELAUNCH_GAP_DAYS){ runStart = dates[i]; gapDetected = true; }
+    }
+    map.set(key, {start:runStart, gapDetected});
+  });
+  return map;
+}
 function baseRows(opts){
   opts = opts || {};
   const campCol = CONFIG.fieldMap.campaign;
@@ -459,10 +479,21 @@ function baseRows(opts){
   // 단, opts.skipEligibility가 true면(예: 차트의 시작/종료 마커) 이 제한을 적용하지 않는다 —
   // 짧게 집행된 캠페인도 타임라인에는 표시돼야 하기 때문.
   const eligibleCamps = (hasRange && campCol && !opts.skipEligibility) ? new Set(eligibleForExclusion(campCol, range)) : null;
-  return RAWROWS.filter(r => inRange(r, range)
-    && (!eligibleCamps || eligibleCamps.has(String(r[campCol])) || STATE.includedShortCampaigns.includes(String(r[campCol])))
-    && !(campCol && STATE.excludedCampaigns.includes(String(r[campCol])))
-    && !(agCol && STATE.excludedAdGroups.includes(String(r[agCol]))));
+  // 재라이브 컷오프도 같은 이유로 skipEligibility에서는 건너뛴다. STATE.includedShortCampaigns에 있는 이름은
+  // (7일 미만 예외와 같은 손잡이를 재사용해) 이 컷오프도 함께 건너뛰어, 오탐 시 사용자가 되살릴 수 있게 한다.
+  const runStartByCamp = (campCol && !opts.skipEligibility) ? latestRunStartByName(RAWROWS.filter(r=>inRange(r, range)), campCol) : null;
+  return RAWROWS.filter(r => {
+    if(!inRange(r, range)) return false;
+    const campName = campCol ? String(r[campCol]) : null;
+    if(eligibleCamps && !eligibleCamps.has(campName) && !STATE.includedShortCampaigns.includes(campName)) return false;
+    if(campCol && STATE.excludedCampaigns.includes(campName)) return false;
+    if(agCol && STATE.excludedAdGroups.includes(String(r[agCol]))) return false;
+    if(runStartByCamp && campName && runStartByCamp.has(campName) && !STATE.includedShortCampaigns.includes(campName)){
+      const d = getDate(r);
+      if(d && toDateInput(d) < runStartByCamp.get(campName).start) return false;
+    }
+    return true;
+  });
 }
 function daysCount(rows){
   const s = new Set();
@@ -1139,6 +1170,8 @@ function renderSummaryTab(){
   const brandCol=CONFIG.fieldMap.brand, countryCol=CONFIG.fieldMap.country, campaignCol=CONFIG.fieldMap.campaign, mediaCol=CONFIG.fieldMap.media;
   const ctCol=CONFIG.fieldMap.creativeType, adGroupCol=CONFIG.fieldMap.adGroup, objectiveCol=CONFIG.fieldMap.objective;
   const a = aggregate(rows);
+  const runInfo = campaignCol ? latestRunStartByName(RAWROWS.filter(r=>inRange(r, STATE.dateRange)), campaignCol) : new Map();
+  const relaunchCount = Array.from(runInfo.entries()).filter(([name,info])=>info.gapDetected && !STATE.includedShortCampaigns.includes(name)).length;
   const displayKeyFn = buildSummaryDisplayKeyFn(rows, campaignCol, ctCol, adGroupCol, countryCol, true);
 
   let html = `<div class="card">
@@ -1152,7 +1185,7 @@ function renderSummaryTab(){
     <div style="font-size:11.5px; color:var(--text-faint); margin-top:12px;">
       적용된 필터 — 기간: <b>${STATE.dateRange.start||'전체'} ~ ${STATE.dateRange.end||'전체'}</b> ·
       제외 캠페인 <b>${STATE.excludedCampaigns.length}</b>개 · 제외 광고그룹 <b>${STATE.excludedAdGroups.length}</b>개 ·
-      7일 미만 포함 캠페인 <b>${STATE.includedShortCampaigns.length}</b>개 ·
+      7일 미만 포함 캠페인 <b>${STATE.includedShortCampaigns.length}</b>개 · 재라이브 감지로 이전 구간 제외된 캠페인 <b>${relaunchCount}</b>개 ·
       전체 ${RAWROWS.length.toLocaleString()}행 중 <b>${rows.length.toLocaleString()}</b>행 반영
     </div>
   </div>`;
