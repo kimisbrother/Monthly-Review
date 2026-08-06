@@ -1553,14 +1553,21 @@ async function saveStateToServer(){
     await fetch(CONFIG.appsScriptUrl, {method:'POST', mode:'no-cors', body:JSON.stringify({action:'saveReport', name, previousName, state:STATE})});
     // GET은 브라우저/중간 캐시에 걸릴 수 있어서 cache:'no-store' + 매번 다른 쿼리로 캐시를 피하고,
     // 반영이 살짝 늦을 수 있으니 신선한(20초 이내) savedAt이 보일 때까지 잠깐 간격을 두고 재시도한다.
-    let verifyJson = null;
-    for(let attempt=0; attempt<3; attempt++){
+    // Apps Script는 응답을 script.googleusercontent.com으로 리다이렉트해서 실제 내용을 서빙하는데,
+    // 이 리다이렉트 단계가 가끔 404를 내는 구글 쪽 인프라 이슈가 있다 — 그때는 JSON 파싱 자체가
+    // 실패하므로(예외가 던져짐) "아직 확인 안 됨"으로 보고 그대로 재시도한다(마지막 시도의 실패만 던진다).
+    let verifyJson = null, lastErr = null;
+    for(let attempt=0; attempt<4; attempt++){
       if(attempt>0) await new Promise(r=>setTimeout(r,1500));
-      const verifyRes = await fetch(CONFIG.appsScriptUrl+'?action=getReport&name='+encodeURIComponent(name)+'&_ts='+Date.now(), {cache:'no-store'});
-      verifyJson = await verifyRes.json();
-      const freshEnough = verifyJson.ok && verifyJson.savedAt && (Date.now() - new Date(verifyJson.savedAt).getTime() <= 20000);
-      if(freshEnough) break;
+      try{
+        const verifyRes = await fetch(CONFIG.appsScriptUrl+'?action=getReport&name='+encodeURIComponent(name)+'&_ts='+Date.now(), {cache:'no-store'});
+        verifyJson = await verifyRes.json();
+        lastErr = null;
+        const freshEnough = verifyJson.ok && verifyJson.savedAt && (Date.now() - new Date(verifyJson.savedAt).getTime() <= 20000);
+        if(freshEnough) break;
+      }catch(e){ lastErr = e; verifyJson = null; }
     }
+    if(lastErr) throw new Error('저장 확인 중 통신 오류: '+lastErr.message+' (저장 자체는 반영됐을 수 있어요 — 새로고침 후 확인해주세요)');
     if(!verifyJson.ok) throw new Error('저장 확인 실패: '+(verifyJson.error||'해당 이름의 리포트를 찾을 수 없어요.'));
     const savedMsAgo = verifyJson.savedAt ? Date.now() - new Date(verifyJson.savedAt).getTime() : Infinity;
     if(savedMsAgo > 20000) throw new Error('저장이 아직 반영되지 않았어요. 잠시 후 다시 시도해주세요.');
