@@ -1380,7 +1380,8 @@ function renderCountryTab(country){
   // country==='PL' 하드코딩이라 코드가 있는 동안은 어느 리포트를 불러와도(과거 리포트 포함) 보이고,
   // 나중에 이 블록을 지우면 지금 리포트에서도 같이 사라진다. 입력값 자체는 STATE.lessonBlocks에
   // 담겨 리포트별로 저장되므로, 다른 리포트를 불러오면 그 리포트엔 빈 상태로 보인다.
-  if(country==='PL'){
+  // 아직 값을 채워넣는 중인 내부용 섹션이라 뷰어(?viewer=1)에는 통째로 숨긴다.
+  if(country==='PL' && !VIEW_MODE){
     const awarenessBlock = getOrCreateFixedTableBlock('pl-awareness-table', [
       ['캠페인','광고비','노출','도달','빈도','CPM','상기도 상승률'],
       ['PL_MMD_LM_Awareness 1','','','','','',''],
