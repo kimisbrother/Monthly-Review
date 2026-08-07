@@ -1380,8 +1380,9 @@ function renderCountryTab(country){
   // country==='PL' 하드코딩이라 코드가 있는 동안은 어느 리포트를 불러와도(과거 리포트 포함) 보이고,
   // 나중에 이 블록을 지우면 지금 리포트에서도 같이 사라진다. 입력값 자체는 STATE.lessonBlocks에
   // 담겨 리포트별로 저장되므로, 다른 리포트를 불러오면 그 리포트엔 빈 상태로 보인다.
-  // 아직 값을 채워넣는 중인 내부용 섹션이라 뷰어(?viewer=1)에는 통째로 숨긴다.
-  if(country==='PL' && !VIEW_MODE){
+  // 접기 상태 자체가 뷰어 노출 여부를 결정한다 — 펼쳐두면 뷰어에도 보이고, 접으면 편집 화면에선
+  // 작은 요약줄만 남지만 뷰어에는 아예 렌더링되지 않는다(요약줄조차 안 보임).
+  if(country==='PL'){
     const awarenessBlock = getOrCreateFixedTableBlock('pl-awareness-table', [
       ['캠페인','광고비','노출','도달','빈도','CPM','상기도 상승률'],
       ['PL_MMD_LM_Awareness 1','','','','','',''],
@@ -1389,11 +1390,16 @@ function renderCountryTab(country){
     ]);
     const sectionId = 'pl-awareness-section';
     const sectionOpen = !STATE.collapsedSections[sectionId]; // 접었다고 저장된 적 없으면 기본 펼침
-    html += `<details class="section-collapse" data-collapse-id="${sectionId}" ${sectionOpen?'open':''}>
-      <summary>PL Awareness 캠페인 (한시적 — 다음 리포트에는 접어서 숨겨도 됨)</summary>
-      <div class="card card-comment">${sectionHead('pl-awareness-comment','PL Awareness 캠페인 코멘트')}${buildCommentEditor('PL-awareness-comment','PL Awareness 캠페인에 대한 코멘트를 입력하세요')}</div>
-      <div class="card">${sectionHead('pl-awareness-table-title','Awareness 캠페인 성과')}${buildLessonTableBlock(awarenessBlock)}</div>
-    </details>`;
+    const awarenessInner = `<div class="card card-comment">${sectionHead('pl-awareness-comment','PL Awareness 캠페인 코멘트')}${buildCommentEditor('PL-awareness-comment','PL Awareness 캠페인에 대한 코멘트를 입력하세요')}</div>
+      <div class="card">${sectionHead('pl-awareness-table-title','Awareness 캠페인 성과')}${buildLessonTableBlock(awarenessBlock)}</div>`;
+    if(VIEW_MODE){
+      if(sectionOpen) html += awarenessInner; // 뷰어는 토글 없이, 펼쳐진 상태일 때만 그대로 노출
+    } else {
+      html += `<details class="section-collapse" data-collapse-id="${sectionId}" ${sectionOpen?'open':''}>
+        <summary>PL Awareness 캠페인 (한시적 — 접으면 뷰어에서도 숨겨짐)</summary>
+        ${awarenessInner}
+      </details>`;
+    }
   }
 
   if(mediaCol){
