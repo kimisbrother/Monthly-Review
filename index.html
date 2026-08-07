@@ -185,7 +185,19 @@
   .lesson-caption::placeholder{color:var(--text-faint);}
   table.lesson-table td{min-width:90px;}
   table.lesson-table td[contenteditable]{cursor:text;}
+  table.lesson-table tr:first-child td{background:linear-gradient(180deg,var(--ap-blue-700),var(--ap-blue-900)); color:#F3F7FC; font-weight:700; text-align:center; letter-spacing:0.02em;}
   .lesson-add-bar{display:flex; gap:8px; flex-wrap:wrap; justify-content:center; padding:18px 0 4px;}
+  .section-collapse{margin-bottom:22px;}
+  .section-collapse > summary{
+    display:flex; align-items:center; justify-content:space-between; cursor:pointer; list-style:none;
+    padding:8px 14px; border-radius:12px; font-weight:700; font-size:12.5px;
+    color:var(--text-faint); background:var(--surface-2); border:1px solid var(--border);
+  }
+  .section-collapse > summary::-webkit-details-marker{display:none;}
+  .section-collapse > summary::after{content:'▸'; font-size:11px;}
+  .section-collapse[open] > summary{color:var(--primary); margin-bottom:10px;}
+  .section-collapse[open] > summary::after{content:'▾';}
+  .section-collapse > summary:hover{background:var(--primary-tint);}
 
   .empty-state{text-align:center; padding:30px 20px; color:var(--text-faint); font-size:12.5px;}
   .chart-wrap{height:420px; position:relative;}
@@ -404,7 +416,7 @@ let STATE = {
   dateRange:{start:'',end:''}, excludedCampaigns:[], excludedAdGroups:[], includedShortCampaigns:[], tableTitles:{}, comments:{}, highlights:{},
   cardHighlights:{}, images:{},
   targets:{ summary:{budget:0,cpm:0,ctr:0,cpc:0,vtr:0,landingView:0}, country:{} },
-  optDates:{}, lessonBlocks:[]
+  optDates:{}, lessonBlocks:[], collapsedSections:{}
 };
 let charts = {};
 const imageCache = {};
@@ -424,6 +436,7 @@ function ensureStateShape(){
   STATE.targets.country = STATE.targets.country || {};
   STATE.optDates = STATE.optDates || {};
   STATE.lessonBlocks = STATE.lessonBlocks || [];
+  STATE.collapsedSections = STATE.collapsedSections || {};
 }
 
 /* ===========================================================
@@ -797,6 +810,14 @@ document.addEventListener('click', e=>{
   if(pos===-1){ arr.push(cell); el.classList.add('hl'); }
   else{ arr.splice(pos,1); el.classList.remove('hl'); }
 });
+// 접고 펼치는 상태가 리포트별로 저장되는 섹션(<details data-collapse-id>) — toggle은 버블링이 안 되는
+// 경우가 있어서 캡처 단계로 잡는다.
+document.addEventListener('toggle', e=>{
+  if(VIEW_MODE) return;
+  const details = e.target.closest && e.target.closest('details[data-collapse-id]');
+  if(!details) return;
+  STATE.collapsedSections[details.dataset.collapseId] = !details.open;
+}, true);
 // 인플루언서 카드 테두리 강조 (이미지/이름입력/개별 지표 클릭은 제외)
 document.addEventListener('click', e=>{
   if(VIEW_MODE) return;
@@ -1365,8 +1386,13 @@ function renderCountryTab(country){
       ['PL_MMD_LM_Awareness 1','','','','','',''],
       ['PL_MMD_AA_Awareness 1','','','','','','']
     ]);
-    html += `<div class="card card-comment">${sectionHead('pl-awareness-comment','PL Awareness 캠페인 코멘트')}${buildCommentEditor('PL-awareness-comment','PL Awareness 캠페인에 대한 코멘트를 입력하세요')}</div>`;
-    html += `<div class="card">${sectionHead('pl-awareness-table-title','Awareness 캠페인 성과')}${buildLessonTableBlock(awarenessBlock)}</div>`;
+    const sectionId = 'pl-awareness-section';
+    const sectionOpen = !STATE.collapsedSections[sectionId]; // 접었다고 저장된 적 없으면 기본 펼침
+    html += `<details class="section-collapse" data-collapse-id="${sectionId}" ${sectionOpen?'open':''}>
+      <summary>PL Awareness 캠페인 (한시적 — 다음 리포트에는 접어서 숨겨도 됨)</summary>
+      <div class="card card-comment">${sectionHead('pl-awareness-comment','PL Awareness 캠페인 코멘트')}${buildCommentEditor('PL-awareness-comment','PL Awareness 캠페인에 대한 코멘트를 입력하세요')}</div>
+      <div class="card">${sectionHead('pl-awareness-table-title','Awareness 캠페인 성과')}${buildLessonTableBlock(awarenessBlock)}</div>
+    </details>`;
   }
 
   if(mediaCol){
