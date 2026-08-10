@@ -59,6 +59,12 @@
   .period-label{font-size:10px; font-weight:700; color:var(--text-faint); letter-spacing:0.08em;}
   .period-value{font-size:12.5px; font-weight:700; color:var(--ap-blue-700); letter-spacing:0.01em;}
   .topbar-controls{display:flex; align-items:center; gap:8px; flex-wrap:wrap;}
+  .shortcut-bar{display:flex; align-items:center; gap:6px; flex-wrap:wrap;}
+  .shortcut-btn{position:relative; padding-right:22px;}
+  .shortcut-remove{position:absolute; right:5px; top:50%; transform:translateY(-50%); width:14px; height:14px;
+    display:inline-flex; align-items:center; justify-content:center; border-radius:50%;
+    font-size:10px; color:var(--text-faint); cursor:pointer;}
+  .shortcut-remove:hover{background:var(--bad-tint); color:var(--bad);}
   .gear-btn{
     width:36px; height:36px; border-radius:50%; border:1px solid var(--border);
     background:var(--surface-2); color:var(--text-dim); font-size:15px; line-height:1;
@@ -258,6 +264,8 @@
       <div class="period"><span class="period-label">리포트 기간</span><span class="period-value" id="dateRangeLabel">불러오는 중...</span></div>
     </div>
     <div class="topbar-controls">
+      <div class="shortcut-bar" id="shortcutBar"></div>
+      <button class="gear-btn" id="addShortcutBtn" title="바로가기 추가" aria-label="바로가기 추가">+</button>
       <button class="gear-btn" id="settingsBtn" title="설정" aria-label="설정">⚙</button>
     </div>
   </div>
@@ -292,7 +300,7 @@
           <label>불러오기 — 과거/다른 기간 리포트</label>
           <div class="desc">기간 설정에 따라 자동으로 이름이 붙어요 (예: 26.06.01 ~ 07.06 리뷰). 불러오면 내 화면에서만 미리보기/편집되고, 저장하기 전까지 다른 사람에게는 반영되지 않아요.</div>
           <div style="display:flex; gap:8px; margin-top:6px;">
-            <select id="loadReportSelect" style="flex:1;"><option value="">-- 리포트 선택 --</option></select>
+            <select class="report-select" id="loadReportSelect" style="flex:1;"><option value="">-- 리포트 선택 --</option></select>
             <button class="btn" id="loadReportBtn">불러오기</button>
           </div>
         </div>
@@ -375,6 +383,25 @@
   </div>
 </div>
 
+<!-- ===================== 바로가기 추가 모달 ===================== -->
+<div class="modal-overlay" id="shortcutModal">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-head"><h3>바로가기 추가</h3><button class="btn" id="shortcutModalClose" style="padding:4px 8px;">✕</button></div>
+    <div class="modal-body">
+      <div class="field"><label>제목</label><input type="text" id="shortcut-title" placeholder="예: 6월 리뷰"></div>
+      <div class="field">
+        <label>리포트 선택</label>
+        <select class="report-select" id="shortcut-report"><option value="">-- 리포트 선택 --</option></select>
+        <div class="desc">이미 저장된 리포트 중에서 이 바로가기가 연결될 리포트를 선택하세요.</div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" id="shortcutModalCancel">취소</button>
+      <button class="btn btn-primary" id="shortcutModalAdd">추가</button>
+    </div>
+  </div>
+</div>
+
 <script>
 /* ===========================================================
    기본값
@@ -396,6 +423,8 @@ if(VIEW_MODE){
   document.body.classList.add('view-mode');
   const gearBtn = document.getElementById('settingsBtn');
   if(gearBtn) gearBtn.style.display = 'none';
+  const addShortcutBtn = document.getElementById('addShortcutBtn');
+  if(addShortcutBtn) addShortcutBtn.style.display = 'none';
 }
 // 매핑/차트 진단 로그: 평소엔 숨김, 문제 생기면 주소 끝에 ?debug=1 붙여서 확인
 const DEBUG_MODE = new URLSearchParams(location.search).get('debug') === '1';
@@ -416,7 +445,7 @@ let STATE = {
   dateRange:{start:'',end:''}, excludedCampaigns:[], excludedAdGroups:[], includedShortCampaigns:[], tableTitles:{}, comments:{}, highlights:{},
   cardHighlights:{}, images:{},
   targets:{ summary:{budget:0,cpm:0,ctr:0,cpc:0,vtr:0,landingView:0}, country:{} },
-  optDates:{}, lessonBlocks:[], collapsedSections:{}
+  optDates:{}, lessonBlocks:[], collapsedSections:{}, reportShortcuts:[]
 };
 let charts = {};
 const imageCache = {};
@@ -437,6 +466,7 @@ function ensureStateShape(){
   STATE.optDates = STATE.optDates || {};
   STATE.lessonBlocks = STATE.lessonBlocks || [];
   STATE.collapsedSections = STATE.collapsedSections || {};
+  STATE.reportShortcuts = STATE.reportShortcuts || [];
 }
 
 /* ===========================================================
@@ -1619,6 +1649,48 @@ function updateWorkingReportLabel(){
   const el = document.getElementById('workingReportLabel');
   if(el) el.textContent = formatReportName(STATE.dateRange);
 }
+// 상단의 리포트 바로가기 버튼들 — 편집 화면과 뷰어(?viewer=1) 모두에 보인다(추가 버튼만 편집 전용).
+function renderShortcutBar(){
+  const bar = document.getElementById('shortcutBar');
+  if(!bar) return;
+  bar.innerHTML = STATE.reportShortcuts.map((s,i)=>`
+    <button class="btn shortcut-btn" data-shortcut-idx="${i}" title="${esc(s.reportName)}">
+      ${esc(s.title)}${VIEW_MODE?'':`<span class="shortcut-remove" data-remove-shortcut="${i}" title="바로가기 삭제">✕</span>`}
+    </button>`).join('');
+}
+document.addEventListener('click', e=>{
+  const rm = e.target.closest('[data-remove-shortcut]');
+  if(rm){
+    if(VIEW_MODE) return;
+    e.stopPropagation();
+    STATE.reportShortcuts.splice(Number(rm.dataset.removeShortcut), 1);
+    renderShortcutBar();
+    showBanner('바로가기를 삭제했어요. "저장하기"를 눌러야 다른 사람에게도 반영돼요.','ok');
+    return;
+  }
+  const btn = e.target.closest('.shortcut-btn');
+  if(!btn) return;
+  const s = STATE.reportShortcuts[Number(btn.dataset.shortcutIdx)];
+  if(s) loadReportByName(s.reportName);
+});
+document.getElementById('addShortcutBtn').addEventListener('click', ()=>{
+  document.getElementById('shortcut-title').value = '';
+  document.getElementById('shortcut-report').value = '';
+  loadReportList();
+  document.getElementById('shortcutModal').classList.add('show');
+});
+document.getElementById('shortcutModalClose').addEventListener('click', ()=>document.getElementById('shortcutModal').classList.remove('show'));
+document.getElementById('shortcutModalCancel').addEventListener('click', ()=>document.getElementById('shortcutModal').classList.remove('show'));
+document.getElementById('shortcutModal').addEventListener('click', e=>{ if(e.target.id==='shortcutModal') e.target.classList.remove('show'); });
+document.getElementById('shortcutModalAdd').addEventListener('click', ()=>{
+  const title = document.getElementById('shortcut-title').value.trim();
+  const reportName = document.getElementById('shortcut-report').value;
+  if(!title || !reportName){ showBanner('제목과 리포트를 모두 선택해주세요.','error'); return; }
+  STATE.reportShortcuts.push({title, reportName});
+  document.getElementById('shortcutModal').classList.remove('show');
+  renderShortcutBar();
+  showBanner('바로가기를 추가했어요. "저장하기"를 눌러야 다른 사람에게도 보여요.','ok');
+});
 // 지금 화면에 불러와진 리포트의 서버상 이름 — 날짜를 바꿔서 저장할 때 "이름 바꾸기(수정)"인지
 // "새 리포트로 따로 저장"인지 구분하는 기준이 된다. 아직 아무 것도 안 불러왔으면 빈 문자열.
 let loadedReportName = '';
@@ -1689,16 +1761,19 @@ async function saveStateToServer(){
   finally{ btn.disabled=false; btn.innerHTML='☁️ 저장'; }
 }
 async function loadReportList(){
-  const sel = document.getElementById('loadReportSelect');
-  if(!sel || !CONFIG.appsScriptUrl) return;
+  // 설정 모달의 불러오기 드롭다운과 바로가기 추가 모달의 리포트 선택, 둘 다 이 클래스로 채운다
+  const selects = document.querySelectorAll('.report-select');
+  if(!selects.length || !CONFIG.appsScriptUrl) return;
   try{
     const res = await fetch(CONFIG.appsScriptUrl+'?action=listReports', {cache:'no-store'});
     const json = await res.json();
     if(!json.ok) return;
-    const current = sel.value;
-    sel.innerHTML = '<option value="">-- 리포트 선택 --</option>' +
-      json.reports.map(r=>`<option value="${esc(r.name)}">${esc(r.name)}</option>`).join('');
-    if(current) sel.value = current;
+    selects.forEach(sel=>{
+      const current = sel.value;
+      sel.innerHTML = '<option value="">-- 리포트 선택 --</option>' +
+        json.reports.map(r=>`<option value="${esc(r.name)}">${esc(r.name)}</option>`).join('');
+      if(current) sel.value = current;
+    });
   }catch(e){ console.warn('리포트 목록 불러오기 실패', e); }
 }
 async function loadReportByName(name){
@@ -1707,13 +1782,19 @@ async function loadReportByName(name){
     const res = await fetch(CONFIG.appsScriptUrl+'?action=getReport&name='+encodeURIComponent(name), {cache:'no-store'});
     const json = await res.json();
     if(!json.ok){ showBanner('불러오기 실패: '+(json.error||'리포트를 찾을 수 없어요.'),'error'); return; }
+    // 상단 바로가기 목록은 "어느 리포트를 보고 있는지"와 무관한 내비게이션이라, 리포트를 전환해도
+    // 그대로 유지한다 — 안 그러면 불러온 리포트에 저장된(오래된) 바로가기 목록으로 뒤바뀌어버린다.
+    const keepShortcuts = STATE.reportShortcuts;
     STATE = Object.assign(STATE, JSON.parse(json.state||'{}'));
+    STATE.reportShortcuts = keepShortcuts;
     loadedReportName = json.reportName || name;
     ensureStateShape();
     await loadImagesFromServer();
     updateWorkingReportLabel();
     renderCurrentTab();
-    showBanner(`"${name}" 리포트를 불러왔어요. 아직 저장 전이라 나한테만 보여요 — 저장하면 모두의 기본 화면이 바뀝니다.`,'ok');
+    showBanner(VIEW_MODE
+      ? `"${name}" 리포트를 불러왔어요.`
+      : `"${name}" 리포트를 불러왔어요. 아직 저장 전이라 나한테만 보여요 — 저장하면 모두의 기본 화면이 바뀝니다.`, 'ok');
   }catch(e){ showBanner('불러오기 실패: '+e.message,'error'); }
 }
 
@@ -2098,6 +2179,7 @@ document.getElementById('pdfBtn').addEventListener('click', async ()=>{
   ensureStateShape();
   await loadStateFromServer();
   ensureStateShape();
+  renderShortcutBar();
   if(!CONFIG.csvUrl){ openSettings(); }
   else { await syncData(); }
 })();
