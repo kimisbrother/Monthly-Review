@@ -546,8 +546,21 @@ function originalRunEndByName(rows, campCol, agCol){
   });
   return map;
 }
+// baseRows()는 렌더 한 번마다 여러 번(탭 전환·PDF 내보내기 루프 등) 호출되는데, 그때마다
+// eligibleForExclusion/originalRunEndByName이 전체 RAWROWS를 다시 스캔해서 데이터가 많아질수록
+// 브라우저가 멈추거나(무거움) 타임아웃처럼 느껴진다 — 입력(기간/제외 목록)이 같으면 결과도 같으므로
+// 그 조합을 키로 캐싱한다. RAWROWS 자체가 바뀌는 sync/report 로드 시점에만 비운다.
+const _baseRowsCache = new Map();
+function invalidateBaseRowsCache(){ _baseRowsCache.clear(); }
 function baseRows(opts){
   opts = opts || {};
+  const cacheKey = JSON.stringify([STATE.dateRange, STATE.excludedCampaigns, STATE.excludedAdGroups, STATE.includedShortCampaigns, !!opts.skipEligibility]);
+  if(_baseRowsCache.has(cacheKey)) return _baseRowsCache.get(cacheKey);
+  const result = baseRowsUncached(opts);
+  _baseRowsCache.set(cacheKey, result);
+  return result;
+}
+function baseRowsUncached(opts){
   const campCol = CONFIG.fieldMap.campaign;
   const agCol = CONFIG.fieldMap.adGroup;
   const range = STATE.dateRange;
@@ -1919,6 +1932,7 @@ async function syncData(){
   try{
     const parsed = await fetchCsv(CONFIG.csvUrl);
     RAWROWS = parsed.data.filter(r=>Object.values(r).some(v=>v!==''&&v!==null&&v!==undefined));
+    invalidateBaseRowsCache();
     RAWHEADERS = parsed.meta.fields||[];
     const coreKeys = ['date','brand','country','media','creativeType','campaign','spent','impression','click','view'];
     if(coreKeys.some(k=>!CONFIG.fieldMap[k]) && RAWHEADERS.length){ CONFIG.fieldMap = guessMapping(RAWHEADERS); saveJSON(LS.config, CONFIG); }
@@ -2076,6 +2090,7 @@ document.getElementById('testConnBtn').addEventListener('click', async ()=>{
     const headers = parsed.meta.fields||[];
     RAWHEADERS = headers;
     RAWROWS = parsed.data.filter(r=>Object.values(r).some(v=>v!==''&&v!==null&&v!==undefined));
+    invalidateBaseRowsCache();
     CONFIG.fieldMap = guessMapping(headers);
     buildMappingUI(headers);
     document.getElementById('mappingSection').style.display='block';
@@ -2175,7 +2190,8 @@ document.getElementById('pdfBtn').addEventListener('click', async ()=>{
       const panel = document.querySelector('.tab-panel.active');
       const cards = panel ? panel.querySelectorAll(':scope > .card') : [];
       for(const card of cards){
-        const canvas = await html2canvas(card, {scale:2, backgroundColor:'#ffffff'});
+        // ponytail: scale 2→1.5 cuts raster/encode cost ~45% (quadratic in scale); bump back up if print quality suffers
+        const canvas = await html2canvas(card, {scale:1.5, backgroundColor:'#ffffff'});
         const imgW = contentW;
         const imgH = canvas.height * imgW / canvas.width;
         if(y + imgH > pageH - margin && y > margin){ pdf.addPage(); y = margin; }
