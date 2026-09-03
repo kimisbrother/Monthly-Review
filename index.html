@@ -218,7 +218,7 @@
   .chart-wrap{height:420px; position:relative;}
 
   .chart-tooltip{position:absolute; opacity:0; pointer-events:none; transition:opacity .1s ease; z-index:20; transform:translate(-50%,-100%); margin-top:-12px; will-change:transform, opacity;}
-  .ctt{background:var(--ap-blue-900); color:#fff; border-radius:12px; padding:13px 15px; font-size:12px; min-width:220px; box-shadow:0 14px 28px rgba(0,0,0,0.32); border:1px solid rgba(255,255,255,0.08);}
+  .ctt{background:var(--ap-blue-900); color:#fff; border-radius:12px; padding:13px 15px; font-size:12px; width:300px; box-shadow:0 14px 28px rgba(0,0,0,0.32); border:1px solid rgba(255,255,255,0.08);}
   .ctt-date{font-family:var(--font-mono); font-size:10.5px; color:rgba(255,255,255,0.55); text-align:center; letter-spacing:0.03em; margin-bottom:9px;}
   .ctt-summary{display:flex; justify-content:center; gap:20px; padding-bottom:10px;}
   .ctt-summary-val{font-weight:800; font-size:13.5px; text-align:center; color:#fff;}
@@ -231,7 +231,7 @@
   .ctt-swatch{width:8px; height:8px; border-radius:50%; flex:0 0 auto;}
   .ctt-sub{display:flex; gap:6px; padding-left:14px; font-size:11px; color:rgba(255,255,255,0.72); margin-top:3px;}
   .ctt-sub-label{flex:0 0 44px; color:rgba(255,255,255,0.42);}
-  .ctt-sub-val{flex:1;}
+  .ctt-sub-val{flex:1; min-width:0; overflow-wrap:break-word;}
 
   .modal-overlay{display:none; position:fixed; inset:0; background:rgba(20,22,40,0.45); z-index:100; align-items:center; justify-content:center; padding:20px;}
   .modal-overlay.show{display:flex;}
