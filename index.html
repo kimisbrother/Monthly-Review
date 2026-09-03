@@ -10,6 +10,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js" onerror="this.onerror=null;var s=document.createElement('script');s.src='https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js';document.head.appendChild(s);"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
   :root{
     --bg:#F2F4F7; --surface:#FFFFFF; --surface-2:#F5F7FA; --border:#DFE4EA;
@@ -310,9 +311,6 @@
       <div class="settings-section">
         <div class="ss-title">데이터 연결</div>
         <div class="field"><label>Raw 데이터 CSV 게시 URL</label><input type="text" id="cfg-csvUrl"></div>
-        <div class="field"><label>Apps Script 웹앱 URL</label><input type="text" id="cfg-appsScriptUrl" placeholder="https://script.google.com/macros/s/.../exec">
-          <div class="desc">이 값은 이 브라우저에만 저장돼요. 팀 전체가 공유하려면 코드 상단 APPS_SCRIPT_URL에 직접 채워서 배포하세요.</div>
-        </div>
         <button class="btn" id="testConnBtn" style="width:100%; justify-content:center;">연결 테스트</button>
         <div class="status-line" id="connStatus"></div>
         <div id="mappingSection" style="display:none; margin-top:12px;">
@@ -406,15 +404,19 @@
 /* ===========================================================
    기본값
 =========================================================== */
-const DEFAULT_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTR5Nd2gEUhxVZEGxr5Hl3EiteaWx1yL6Nio1iRk3Y4dKAofaGzMD1PbKBjF4vjlxzXoeluwVCAu9I7/pub?gid=1112034945&single=true&output=csv';
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzLk_OPSHinHmtA-rckSwi7CIgAT1PU378PeTI_uf6-ic9SpIbxcJVDs9DRYSfB7MaK/exec';
+const DEFAULT_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTR5Nd2gEUhxVZEGxr5Hl3EiteaWx1yL6Nio1iRk3Y4dKAofaGzMD1PbKBjF4vjlxzXoeluwVCAu9I7/pub?gid=1218552599&single=true&output=csv';
+const SUPABASE_URL = 'https://ycprifuemdczieqbwwrd.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InljcHJpZnVlbWRjemllcWJ3d3JkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODgyNjgzOTAsImV4cCI6MjEwMzg0NDM5MH0.U9Z5ov3Iedt2jMzg8YbqmPgzbj6mtsgeEZPxJ8e5JD0';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const REPORT_IMAGES_BUCKET = 'report-images';
 
-const LS = { config:'mrDash_config' };
+// v2: 새 gid로 CSV 링크가 바뀌었고 Apps Script 백엔드가 Supabase로 통째로 교체됐다 —
+// 예전 localStorage에 저장된 옛 csvUrl/appsScriptUrl이 새 설정을 가리게 두지 않도록 키를 새로 씀
+const LS = { config:'mrDash_config_v2' };
 function loadJSON(key, fallback){ try{ const v=localStorage.getItem(key); return v?JSON.parse(v):fallback; }catch(e){ return fallback; } }
 function saveJSON(key, val){ localStorage.setItem(key, JSON.stringify(val)); }
 
-let CONFIG = loadJSON(LS.config, { csvUrl: DEFAULT_CSV_URL, appsScriptUrl: APPS_SCRIPT_URL, fieldMap:{} });
-if(!CONFIG.appsScriptUrl && APPS_SCRIPT_URL) CONFIG.appsScriptUrl = APPS_SCRIPT_URL;
+let CONFIG = loadJSON(LS.config, { csvUrl: DEFAULT_CSV_URL, fieldMap:{} });
 
 /* 광고주 등에게 공유하는 보기 전용 링크: 주소 끝에 ?viewer=1 을 붙이면 편집/설정 UI가 모두 숨겨짐.
    (프론트엔드 레벨의 소프트 게이트이며, 완전한 서버 보안은 아님) */
@@ -448,7 +450,6 @@ let STATE = {
   optDates:{}, lessonBlocks:[], collapsedSections:{}, reportShortcuts:[]
 };
 let charts = {};
-const imageCache = {};
 
 function ensureStateShape(){
   STATE.dateRange = STATE.dateRange || {start:'',end:''};
@@ -996,31 +997,48 @@ function compressImage(file){
   });
 }
 // slotKey(주로 'name::인플루언서명') 기준으로 결정적인 키를 만든다 — 매번 새 키를 발급하는 대신
-// 이 키로 서버 전체 이미지 캐시(imageCache, getImages로 전체를 불러옴)를 바로 찾을 수 있어서
-// 다른 리포트에서 같은 이름으로 올린 사진이 새 리포트에도 STATE.images 기록 없이 자동으로 매칭된다.
-function canonicalImgKey(slotKey){ return 'img_'+slotKey.replace(/[^a-zA-Z0-9]/g,'_'); }
+// 이 키로 Supabase Storage의 공개 URL을 바로 계산할 수 있어서, 다른 리포트에서 같은 이름으로
+// 올린 사진이 새 리포트에도 STATE.images 기록 없이 자동으로 매칭된다.
+function canonicalImgKey(slotKey){ return 'img_'+slotKey.replace(/[^a-zA-Z0-9]/g,'_')+'.jpg'; }
+// Storage 공개 URL은 네트워크 요청 없는 단순 문자열 조합이라, 이미지 존재 여부와 무관하게
+// 항상 즉시 계산된다 — 실제로 그 URL에 파일이 있는지는 <img>가 로드를 시도해봐야 알 수 있다.
+function reportImageUrl(imgKey){ return sb.storage.from(REPORT_IMAGES_BUCKET).getPublicUrl(imgKey).data.publicUrl; }
+function handleImgSlotLoad(img){
+  img.style.display = '';
+  const slot = img.closest('.img-slot');
+  const ph = slot && slot.querySelector('.placeholder');
+  if(ph) ph.style.display = 'none';
+}
+function handleImgSlotError(img){
+  const slot = img.closest('.img-slot');
+  img.remove();
+  const btn = slot && slot.querySelector('.remove-btn');
+  if(btn) btn.remove();
+}
 async function setSlotImage(slotKey, file){
   const dataUrl = await compressImage(file);
   const imgKey = canonicalImgKey(slotKey);
-  imageCache[imgKey] = dataUrl;
+  const blob = await (await fetch(dataUrl)).blob();
+  const { error } = await sb.storage.from(REPORT_IMAGES_BUCKET).upload(imgKey, blob, {upsert:true, contentType:'image/jpeg'});
+  if(error){ showBanner('이미지 업로드 실패: '+error.message, 'error'); return; }
   STATE.images[slotKey] = imgKey;
-  // saveReport와 같은 이유(Apps Script POST 응답에 CORS 헤더 없음)로 no-cors 사용 — 업로드 자체는 그대로 진행된다.
-  if(CONFIG.appsScriptUrl) fetch(CONFIG.appsScriptUrl, {method:'POST', mode:'no-cors', body:JSON.stringify({action:'saveImage', key:imgKey, data:dataUrl})}).catch(()=>{});
   renderCurrentTab();
 }
 function buildImgSlot(slotKey, legacyKey, extraClass){
   // legacyKey: 이름 기준 공유 방식으로 바꾸기 전, 카드별로 저장했던 옛 키 — 예전에 올린 사진도 계속 보이게 함
   // STATE.images에 slotKey가 명시적으로 있으면(삭제 시 null로 기록) 그 값을 그대로 따르고,
-  // 아예 기록이 없을 때만 이름 기반 canonical 키로 전역 이미지 캐시를 찾아본다.
-  const canonical = canonicalImgKey(slotKey);
+  // 아예 기록이 없을 때만 이름 기반 canonical 키로 Storage에서 찾아본다.
   let imgKey;
   if(slotKey in STATE.images) imgKey = STATE.images[slotKey];
   else if(legacyKey && legacyKey in STATE.images) imgKey = STATE.images[legacyKey];
-  else imgKey = imageCache[canonical] ? canonical : null;
-  const cached = imgKey ? imageCache[imgKey] : null;
+  else imgKey = canonicalImgKey(slotKey);
   const legacyAttr = legacyKey ? ` data-legacy-slot="${esc(legacyKey)}"` : '';
+  const imgHtml = imgKey
+    ? `<img src="${esc(reportImageUrl(imgKey))}" style="display:none" onload="handleImgSlotLoad(this)" onerror="handleImgSlotError(this)"><button class="remove-btn" data-remove-slot="${esc(slotKey)}"${legacyAttr}>✕</button>`
+    : '';
   return `<div class="img-slot ${extraClass||''}" data-slot="${esc(slotKey)}"${legacyAttr}>
-    ${cached ? `<img src="${cached}"><button class="remove-btn" data-remove-slot="${esc(slotKey)}"${legacyAttr}>✕</button>` : `<div class="placeholder">📷<br>클릭/붙여넣기/드래그</div>`}
+    ${imgHtml}
+    <div class="placeholder">📷<br>클릭/붙여넣기/드래그</div>
     <input type="file" accept="image/*" data-file-slot="${esc(slotKey)}">
   </div>`;
 }
@@ -1642,7 +1660,7 @@ function renderCurrentTab(){
 }
 
 /* ===========================================================
-   Apps Script 연동
+   Supabase 연동
 =========================================================== */
 function showBanner(msg,type){
   const b=document.getElementById('banner');
@@ -1708,35 +1726,19 @@ document.getElementById('shortcutModalAdd').addEventListener('click', ()=>{
 // "새 리포트로 따로 저장"인지 구분하는 기준이 된다. 아직 아무 것도 안 불러왔으면 빈 문자열.
 let loadedReportName = '';
 async function loadStateFromServer(){
-  if(!CONFIG.appsScriptUrl){ showBanner('Apps Script URL이 설정되지 않아 이 브라우저에서만 임시로 작업돼요.','error'); return; }
   try{
-    const res = await fetch(CONFIG.appsScriptUrl+'?action=getState', {cache:'no-store'});
-    const json = await res.json();
-    if(json.ok){
-      STATE = Object.assign(STATE, JSON.parse(json.state||'{}'));
-      loadedReportName = json.reportName || '';
-      ensureStateShape();
-      await loadImagesFromServer();
-      showBanner('공유된 최신(현재) 리포트를 불러왔어요.','ok');
-    }
+    const { data: appState, error: appErr } = await sb.from('app_state').select('current_report').eq('id',1).single();
+    if(appErr) throw appErr;
+    if(!appState.current_report) return; // 아직 아무도 저장한 적 없음 — 로컬 기본 STATE 그대로 사용
+    const { data, error } = await sb.from('reports').select('state').eq('name', appState.current_report).single();
+    if(error) throw error;
+    STATE = Object.assign(STATE, data.state || {});
+    loadedReportName = appState.current_report;
+    ensureStateShape();
+    showBanner('공유된 최신(현재) 리포트를 불러왔어요.','ok');
   }catch(e){ showBanner('상태 불러오기 실패: '+e.message,'error'); }
 }
-async function loadImagesFromServer(){
-  if(!CONFIG.appsScriptUrl) return;
-  // Apps Script가 응답을 서빙하는 리다이렉트 단계가 가끔 실패하는 구글 쪽 인프라 이슈가 있어서
-  // (저장 확인 로직과 같은 원인) 한 번 실패해도 곧바로 포기하지 않고 잠깐 간격을 두고 재시도한다.
-  for(let attempt=0; attempt<3; attempt++){
-    if(attempt>0) await new Promise(r=>setTimeout(r,1200));
-    try{
-      const res = await fetch(CONFIG.appsScriptUrl+'?action=getImages&_ts='+Date.now(), {cache:'no-store'});
-      const json = await res.json();
-      if(json.ok){ Object.assign(imageCache, json.images); return; }
-    }catch(e){ console.warn('이미지 로드 시도 실패 ('+(attempt+1)+'/3)', e); }
-  }
-  showBanner('이미지 목록을 불러오는 데 실패했어요. 잠시 후 새로고침해주세요.','error');
-}
 async function saveStateToServer(){
-  if(!CONFIG.appsScriptUrl){ showBanner('Apps Script URL을 먼저 설정해주세요.','error'); return; }
   const btn=document.getElementById('saveBtn');
   const name = formatReportName(STATE.dateRange);
   // 날짜를 바꿔서 이름이 달라지는 경우, 그냥 새로 저장하면 예전 이름의 리포트가 서버에 그대로 남는다.
@@ -1749,31 +1751,15 @@ async function saveStateToServer(){
   }
   btn.disabled=true; btn.innerHTML='<span class="spin">☁️</span> 저장 중...';
   try{
-    // Apps Script 웹앱은 POST 응답에 CORS 헤더를 안 붙여서(구글 앱스크립트의 알려진 한계) 브라우저가
-    // 응답을 못 읽는다 — 다만 이건 "응답 읽기"만 막는 거라, Content-Type이 simple(text/plain)이라
-    // 프리플라이트 없이 요청 자체는 서버에 도달해 실제로 실행된다. no-cors로 보내 저장은 그대로
-    // 진행시키고, 실제로 반영됐는지는 CORS가 잘 되는 GET(getReport)으로 다시 확인해서 판단한다.
-    await fetch(CONFIG.appsScriptUrl, {method:'POST', mode:'no-cors', body:JSON.stringify({action:'saveReport', name, previousName, state:STATE})});
-    // GET은 브라우저/중간 캐시에 걸릴 수 있어서 cache:'no-store' + 매번 다른 쿼리로 캐시를 피하고,
-    // 반영이 살짝 늦을 수 있으니 신선한(20초 이내) savedAt이 보일 때까지 잠깐 간격을 두고 재시도한다.
-    // Apps Script는 응답을 script.googleusercontent.com으로 리다이렉트해서 실제 내용을 서빙하는데,
-    // 이 리다이렉트 단계가 가끔 404를 내는 구글 쪽 인프라 이슈가 있다 — 그때는 JSON 파싱 자체가
-    // 실패하므로(예외가 던져짐) "아직 확인 안 됨"으로 보고 그대로 재시도한다(마지막 시도의 실패만 던진다).
-    let verifyJson = null, lastErr = null;
-    for(let attempt=0; attempt<4; attempt++){
-      if(attempt>0) await new Promise(r=>setTimeout(r,1500));
-      try{
-        const verifyRes = await fetch(CONFIG.appsScriptUrl+'?action=getReport&name='+encodeURIComponent(name)+'&_ts='+Date.now(), {cache:'no-store'});
-        verifyJson = await verifyRes.json();
-        lastErr = null;
-        const freshEnough = verifyJson.ok && verifyJson.savedAt && (Date.now() - new Date(verifyJson.savedAt).getTime() <= 20000);
-        if(freshEnough) break;
-      }catch(e){ lastErr = e; verifyJson = null; }
+    const savedAt = new Date().toISOString();
+    const { error: upsertErr } = await sb.from('reports').upsert({name, state:STATE, saved_at:savedAt});
+    if(upsertErr) throw upsertErr;
+    if(previousName){
+      const { error: delErr } = await sb.from('reports').delete().eq('name', previousName);
+      if(delErr) throw delErr;
     }
-    if(lastErr) throw new Error('저장 확인 중 통신 오류: '+lastErr.message+' (저장 자체는 반영됐을 수 있어요 — 새로고침 후 확인해주세요)');
-    if(!verifyJson.ok) throw new Error('저장 확인 실패: '+(verifyJson.error||'해당 이름의 리포트를 찾을 수 없어요.'));
-    const savedMsAgo = verifyJson.savedAt ? Date.now() - new Date(verifyJson.savedAt).getTime() : Infinity;
-    if(savedMsAgo > 20000) throw new Error('저장이 아직 반영되지 않았어요. 잠시 후 다시 시도해주세요.');
+    const { error: ptrErr } = await sb.from('app_state').update({current_report:name, current_saved_at:savedAt}).eq('id',1);
+    if(ptrErr) throw ptrErr;
     loadedReportName = name;
     showBanner(previousName
       ? `"${previousName}"를 "${name}"로 이름을 바꿔서 저장했어요.`
@@ -1785,45 +1771,30 @@ async function saveStateToServer(){
 async function loadReportList(){
   // 설정 모달의 불러오기 드롭다운과 바로가기 추가 모달의 리포트 선택, 둘 다 이 클래스로 채운다
   const selects = document.querySelectorAll('.report-select');
-  if(!selects.length || !CONFIG.appsScriptUrl) return;
+  if(!selects.length) return;
   try{
-    const res = await fetch(CONFIG.appsScriptUrl+'?action=listReports', {cache:'no-store'});
-    const json = await res.json();
-    if(!json.ok) return;
+    const { data, error } = await sb.from('reports').select('name').order('name');
+    if(error) throw error;
     selects.forEach(sel=>{
       const current = sel.value;
       sel.innerHTML = '<option value="">-- 리포트 선택 --</option>' +
-        json.reports.map(r=>`<option value="${esc(r.name)}">${esc(r.name)}</option>`).join('');
+        data.map(r=>`<option value="${esc(r.name)}">${esc(r.name)}</option>`).join('');
       if(current) sel.value = current;
     });
   }catch(e){ console.warn('리포트 목록 불러오기 실패', e); }
 }
 async function loadReportByName(name){
-  if(!CONFIG.appsScriptUrl || !name) return;
-  // getReport는 리포트 하나의 전체 STATE를 통째로 실어와서 응답이 커질수록 Apps Script의
-  // 리다이렉트 서빙 단계가 실패하는 그 인프라 이슈를 더 자주 만난다 — 저장 확인/이미지 로딩과
-  // 같은 이유로 캐시 무효화 + 재시도를 넣는다.
-  let json = null, lastErr = null;
-  for(let attempt=0; attempt<3; attempt++){
-    if(attempt>0) await new Promise(r=>setTimeout(r,1200));
-    try{
-      const res = await fetch(CONFIG.appsScriptUrl+'?action=getReport&name='+encodeURIComponent(name)+'&_ts='+Date.now(), {cache:'no-store'});
-      json = await res.json();
-      lastErr = null;
-      break;
-    }catch(e){ lastErr = e; json = null; }
-  }
-  if(lastErr){ showBanner('불러오기 실패: '+lastErr.message+' (다시 시도해주세요)','error'); return; }
-  if(!json.ok){ showBanner('불러오기 실패: '+(json.error||'리포트를 찾을 수 없어요.'),'error'); return; }
+  if(!name) return;
+  const { data, error } = await sb.from('reports').select('state').eq('name', name).single();
+  if(error){ showBanner('불러오기 실패: '+error.message,'error'); return; }
   try{
     // 상단 바로가기 목록은 "어느 리포트를 보고 있는지"와 무관한 내비게이션이라, 리포트를 전환해도
     // 그대로 유지한다 — 안 그러면 불러온 리포트에 저장된(오래된) 바로가기 목록으로 뒤바뀌어버린다.
     const keepShortcuts = STATE.reportShortcuts;
-    STATE = Object.assign(STATE, JSON.parse(json.state||'{}'));
+    STATE = Object.assign(STATE, data.state || {});
     STATE.reportShortcuts = keepShortcuts;
-    loadedReportName = json.reportName || name;
+    loadedReportName = name;
     ensureStateShape();
-    await loadImagesFromServer();
     updateWorkingReportLabel();
     renderCurrentTab();
     showBanner(VIEW_MODE
@@ -1959,7 +1930,6 @@ document.getElementById('loadReportBtn').addEventListener('click', async ()=>{
 const modal = document.getElementById('settingsModal');
 function openSettings(){
   document.getElementById('cfg-csvUrl').value = CONFIG.csvUrl||'';
-  document.getElementById('cfg-appsScriptUrl').value = CONFIG.appsScriptUrl||'';
   document.getElementById('cfg-rangeStart').value = STATE.dateRange.start||'';
   document.getElementById('cfg-rangeEnd').value = STATE.dateRange.end||'';
   const mapSection = document.getElementById('mappingSection');
@@ -2101,7 +2071,6 @@ document.getElementById('testConnBtn').addEventListener('click', async ()=>{
 });
 document.getElementById('modalSave').addEventListener('click', ()=>{
   CONFIG.csvUrl = document.getElementById('cfg-csvUrl').value.trim();
-  CONFIG.appsScriptUrl = document.getElementById('cfg-appsScriptUrl').value.trim();
   document.querySelectorAll('#mapGrid select').forEach(sel=>{ CONFIG.fieldMap[sel.dataset.map]=sel.value; });
   saveJSON(LS.config, CONFIG);
 
