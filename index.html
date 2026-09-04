@@ -529,26 +529,24 @@ function inRange(row, range){
 const _carryInCache = new Map();
 function carryInCampaignStarts(range){
   const campCol = CONFIG.fieldMap.campaign;
-  if(!campCol || !range || !range.start) return new Map();
+  const agCol = CONFIG.fieldMap.adGroup;
+  if(!campCol || !agCol || !range || !range.start) return new Map();
   const cacheKey = range.start+'|'+(range.end||'');
   if(_carryInCache.has(cacheKey)) return _carryInCache.get(cacheKey);
-  const spans = new Map();
-  RAWROWS.forEach(r=>{
-    const d = getDate(r); if(!d) return;
-    const campName = String(r[campCol]);
-    if(!campName) return;
-    const iso = toDateInput(d);
-    if(!spans.has(campName)) spans.set(campName, {min:iso, max:iso});
-    const s = spans.get(campName);
-    if(iso < s.min) s.min = iso;
-    if(iso > s.max) s.max = iso;
-  });
-  const starts = new Map();
-  spans.forEach((s, campName)=>{
-    // 세 조건 모두 필요: 기간 시작 전부터 집행됐고(min<start) · 기간에 걸쳐 실제로 존재하며(max>=start,
-    // 이게 빠지면 몇 달 전에 이미 끝난 캠페인까지 전부 "이월"로 오인해 통째로 다시 집계해버린다) ·
-    // 기간 종료일 이전에 끝난다(max<=end, 아직도 진행 중이면 이월 대상 아님).
-    if(s.min < range.start && s.max >= range.start && (!range.end || s.max <= range.end)) starts.set(campName, s.min);
+  // 재라이브 감지와 같은 방식(공백 3일 기준)으로 캠페인::광고그룹별 구간을 나눈 뒤, "가장 최근 구간"만
+  // 본다 — 단순히 이력 전체의 min/max를 보면, 예전에 반짝 돌다 오래 쉬고 최근 다시 시작한 캠페인을
+  // "쭉 이어진 하나의 캠페인"으로 착각해서 몇 달 전 관련 없는 구간까지 통째로 끌고 들어오게 된다.
+  // (그러면 재라이브 컷오프 로직과 충돌해서 정작 최근 구간이 잘려나가는 문제까지 생긴다.)
+  // 종료일까지의 전체 이력을 넘겨야 "최근 구간"을 제대로 찾을 수 있어서, 시작일 제한 없이 종료일까지만 자른다.
+  const historyRows = range.end ? RAWROWS.filter(r=>{ const d=getDate(r); if(!d) return true; const end=new Date(range.end); end.setHours(23,59,59,999); return d<=end; }) : RAWROWS;
+  const runInfo = originalRunEndByName(historyRows, campCol, agCol);
+  const starts = new Map(); // "캠페인::광고그룹" -> 이월 확장 시작일
+  runInfo.forEach((info, key)=>{
+    // 세 조건 모두 필요: 최근 구간이 기간 시작 전부터 시작됐고(min<start) · 기간에 걸쳐 실제로
+    // 존재하며(max>=start) · 기간 종료일 이전에 끝난다(max<=end, 아직 진행 중이면 이월 대상 아님).
+    if(info.lastSegStart < range.start && info.lastSegEnd >= range.start && (!range.end || info.lastSegEnd <= range.end)){
+      starts.set(key, info.lastSegStart);
+    }
   });
   _carryInCache.set(cacheKey, starts);
   return starts;
@@ -557,9 +555,13 @@ function effectiveInRange(row, range){
   if(!range || (!range.start && !range.end)) return true;
   const d = getDate(row); if(!d) return true;
   const campCol = CONFIG.fieldMap.campaign;
-  if(campCol && range.start && carryInCampaignStarts(range).has(String(row[campCol]))){
-    if(range.end){ const end=new Date(range.end); end.setHours(23,59,59,999); if(d>end) return false; }
-    return true; // 이월 캠페인 — 시작일 제한은 건너뛰고 종료일만 확인
+  const agCol = CONFIG.fieldMap.adGroup;
+  if(campCol && agCol && range.start){
+    const key = String(row[campCol])+'::'+String(row[agCol]).trim();
+    if(carryInCampaignStarts(range).has(key)){
+      if(range.end){ const end=new Date(range.end); end.setHours(23,59,59,999); if(d>end) return false; }
+      return true; // 이월 구간 — 시작일 제한은 건너뛰고 종료일만 확인
+    }
   }
   return inRange(row, range);
 }
@@ -605,7 +607,13 @@ function originalRunEndByName(rows, campCol, agCol){
       segments[0] = first.concat(segments[0]);
     }
     const firstSeg = segments[0];
-    map.set(key, {agName, end:firstSeg[firstSeg.length-1], gapDetected: segments.length > 1});
+    const lastSeg = segments[segments.length-1];
+    map.set(key, {
+      agName, end:firstSeg[firstSeg.length-1], gapDetected: segments.length > 1,
+      // 이월 캠페인 판단(carryInCampaignStarts)에 쓰인다 — "가장 최근 구간"이 이번 리뷰와
+      // 관련 있는 구간인지 보려면 그 구간만의 시작/종료일이 필요하다 (전체 이력 min/max가 아니라).
+      lastSegStart: lastSeg[0], lastSegEnd: lastSeg[lastSeg.length-1]
+    });
   });
   return map;
 }
