@@ -304,7 +304,7 @@
           <button class="btn" id="reloadStateBtn" title="지금 모두에게 보이는 리포트를 불러와서 이어서 편집합니다">✎ 수정하기</button>
           <button class="btn" id="syncBtn">⟲ 데이터 Sync</button>
           <button class="btn" id="pdfBtn">📄 PDF 내보내기</button>
-          <button class="btn btn-primary" id="saveBtn">☁️ 저장하기</button>
+          <button class="btn btn-primary" id="saveBtn" title="지금 화면(코멘트·하이라이트·이미지 등 편집 내용)을 모두에게 보이는 리포트로 저장합니다. 설정은 건드리지 않아요.">☁️ 리포트 저장</button>
         </div>
         <div class="field" style="margin-top:12px;">
           <label>불러오기 — 과거/다른 기간 리포트</label>
@@ -386,7 +386,7 @@
     </div>
     <div class="modal-foot">
       <button class="btn" id="modalCancel">취소</button>
-      <button class="btn btn-primary" id="modalSave">저장하고 동기화</button>
+      <button class="btn btn-primary" id="modalSave" title="위에서 입력한 설정(데이터 연결·기간·제외 목록·미디어믹스 Target)을 적용하고, 데이터를 다시 불러온 뒤 리포트도 함께 저장합니다.">⚙ 설정 저장 &amp; 동기화</button>
     </div>
   </div>
 </div>
@@ -1768,7 +1768,7 @@ async function saveStateToServer(){
       : `"${name}"로 저장했어요. 이제 이 링크를 여는 모두가 이 리포트를 기본으로 봅니다.`, 'ok');
     await loadReportList();
   }catch(e){ showBanner('저장 실패: '+e.message,'error'); }
-  finally{ btn.disabled=false; btn.innerHTML='☁️ 저장'; }
+  finally{ btn.disabled=false; btn.innerHTML='☁️ 리포트 저장'; }
 }
 async function loadReportList(){
   // 설정 모달의 불러오기 드롭다운과 바로가기 추가 모달의 리포트 선택, 둘 다 이 클래스로 채운다
