@@ -1317,7 +1317,11 @@ function renderTrendChart(canvasId, chartKey, rows, campCol, ctCol, adGroupCol, 
     const canvas = document.getElementById(canvasId);
     if(!canvas) return;
     if(!chartsAvailable()){ showChartFallback(canvas,'차트 라이브러리를 불러오지 못했습니다.'); return; }
-    const dayMap = groupBy(rows, r=>{ const d=getDate(r); return d?toDateInput(d):'?'; });
+    // 이월 캠페인(전체 기간 집계용) 때문에 rows에 기간 시작일 이전 날짜가 섞여 있을 수 있다 —
+    // 합계표/스탯 카드는 그 전체를 반영해야 맞지만, 이 차트의 날짜축은 지정한 기간만 보여줘야 하므로
+    // 여기서만 별도로 기간 안쪽 날짜로 다시 잘라낸다.
+    const chartRows = rows.filter(r=>inRange(r, STATE.dateRange));
+    const dayMap = groupBy(chartRows, r=>{ const d=getDate(r); return d?toDateInput(d):'?'; });
     const days = Array.from(dayMap.keys()).filter(k=>k!=='?').sort();
     if(days.length===0){ showChartFallback(canvas,'표시할 일자별 데이터가 없어요.'); return; }
     const ctr = days.map(d=>aggregate(dayMap.get(d)).ctr*100);
