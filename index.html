@@ -545,7 +545,10 @@ function carryInCampaignStarts(range){
   });
   const starts = new Map();
   spans.forEach((s, campName)=>{
-    if(s.min < range.start && (!range.end || s.max <= range.end)) starts.set(campName, s.min);
+    // 세 조건 모두 필요: 기간 시작 전부터 집행됐고(min<start) · 기간에 걸쳐 실제로 존재하며(max>=start,
+    // 이게 빠지면 몇 달 전에 이미 끝난 캠페인까지 전부 "이월"로 오인해 통째로 다시 집계해버린다) ·
+    // 기간 종료일 이전에 끝난다(max<=end, 아직도 진행 중이면 이월 대상 아님).
+    if(s.min < range.start && s.max >= range.start && (!range.end || s.max <= range.end)) starts.set(campName, s.min);
   });
   _carryInCache.set(cacheKey, starts);
   return starts;
