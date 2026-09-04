@@ -795,6 +795,29 @@ function buildSummaryDisplayKeyFn(rows, campCol, ctCol, adGroupCol, countryCol, 
     return (v===undefined || v===null || v==='') ? '(빈값)' : String(v);
   };
 }
+function mediaLabel(media){
+  const m = String(media||'').toLowerCase();
+  if(m==='meta') return '메타';
+  if(m==='tiktok') return '틱톡';
+  return media || '';
+}
+// 담당자가 메타/틱톡에 같은 이름으로 캠페인을 만드는 경우가 있어서, 캠페인명만으로 묶으면 서로 다른
+// 두 캠페인(매체가 다름)이 하나의 표 행으로 합쳐져 버린다. 실제로 이름이 여러 매체에 걸쳐 있는
+// 경우에만(그렇지 않은 대부분의 캠페인은 그대로) 이름 뒤에 "(메타)"/"(틱톡)"을 붙여 나눠 집계한다.
+function withPlatformDisambiguation(rows, mediaCol, baseKeyFn){
+  if(!mediaCol) return baseKeyFn;
+  const mediaByLabel = new Map();
+  rows.forEach(r=>{
+    const label = baseKeyFn(r);
+    if(!mediaByLabel.has(label)) mediaByLabel.set(label, new Set());
+    mediaByLabel.get(label).add(String(r[mediaCol]||''));
+  });
+  return function(row){
+    const label = baseKeyFn(row);
+    const medias = mediaByLabel.get(label);
+    return (medias && medias.size > 1) ? `${label} (${mediaLabel(row[mediaCol])})` : label;
+  };
+}
 
 function buildCampaignTable(tableId, rows, campCol){
   if(!campCol) return '<div class="empty-state">Campaign 컬럼 매핑이 필요해요.</div>';
@@ -1433,7 +1456,7 @@ function renderSummaryTab(){
   const brandCol=CONFIG.fieldMap.brand, countryCol=CONFIG.fieldMap.country, campaignCol=CONFIG.fieldMap.campaign, mediaCol=CONFIG.fieldMap.media;
   const ctCol=CONFIG.fieldMap.creativeType, adGroupCol=CONFIG.fieldMap.adGroup, objectiveCol=CONFIG.fieldMap.objective;
   const a = aggregate(rows);
-  const displayKeyFn = buildSummaryDisplayKeyFn(rows, campaignCol, ctCol, adGroupCol, countryCol, true);
+  const displayKeyFn = withPlatformDisambiguation(rows, mediaCol, buildSummaryDisplayKeyFn(rows, campaignCol, ctCol, adGroupCol, countryCol, true));
 
   let html = `<div class="card">
     ${sectionHead('sum-overview-title','캠페인 개요')}
@@ -1505,8 +1528,12 @@ function renderCountryTab(country){
 
   html += `<div class="card card-comment">${sectionHead('c-'+cKey+'-comment', country+' 코멘트')}${buildCommentEditor(country+'-comment', country+' 성과 코멘트를 입력하세요')}</div>`;
 
+  const campaignKeyFn = withPlatformDisambiguation(rows, mediaCol, r=>{
+    const v = campaignCol ? r[campaignCol] : null;
+    return (v===undefined || v===null || v==='') ? '(빈값)' : String(v);
+  });
   html += `<div class="card">${sectionHead('c-'+cKey+'-campaign','캠페인 성과')}
-    <div class="table-wrap">${buildCampaignTable('c-'+cKey+'-campaign', rows, campaignCol)}</div></div>`;
+    <div class="table-wrap">${buildCampaignTable('c-'+cKey+'-campaign', rows, campaignKeyFn)}</div></div>`;
 
   // PL Awareness 캠페인 값을 직접 입력할 수 있는 표 — 이번 리포트 한 번만 쓰는 임시 섹션.
   // country==='PL' 하드코딩이라 코드가 있는 동안은 어느 리포트를 불러와도(과거 리포트 포함) 보이고,
