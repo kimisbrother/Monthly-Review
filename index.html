@@ -478,7 +478,17 @@ function ensureStateShape(){
   STATE.lessonBlocks = STATE.lessonBlocks || [];
   STATE.collapsedSections = STATE.collapsedSections || {};
   STATE.reportShortcuts = STATE.reportShortcuts || [];
+  STATE.frozenRows = STATE.frozenRows || null;
+  STATE.frozenEventRows = STATE.frozenEventRows || null;
 }
+// "저장" 시점의 baseRows() 결과를 STATE에 그대로 얼려서 남긴다 — 지금까지는 저장된 리포트가
+// 필터 조건(기간·제외 목록)만 기억하고 있어서, 나중에 다시 열어보면 "그때 그 조건"을 "지금의"
+// raw 데이터에 다시 들이대는 꼴이었다. raw 데이터 소스가 나중에 손을 대서 바뀌면(원본 시트가
+// 수정/재처리되는 등) 같은 기간·같은 제외 설정인데도 숫자가 조용히 달라지는 문제가 있었다.
+// USE_FROZEN이 켜져 있으면(다른 사람이 저장해둔 "지나간" 리포트를 볼 때) baseRows()가 이 얼린
+// 데이터를 그대로 돌려주고, "현재" 리포트를 볼 때(loadStateFromServer)나 명시적으로 새로고침할
+// 때(syncData)는 꺼서 최신 raw 데이터로 다시 계산한다.
+let USE_FROZEN = false;
 
 /* ===========================================================
    유틸
@@ -565,6 +575,9 @@ const _baseRowsCache = new Map();
 function invalidateBaseRowsCache(){ _baseRowsCache.clear(); }
 function baseRows(opts){
   opts = opts || {};
+  if(USE_FROZEN && STATE.frozenRows){
+    return opts.skipEligibility ? (STATE.frozenEventRows || STATE.frozenRows) : STATE.frozenRows;
+  }
   const cacheKey = JSON.stringify([STATE.dateRange, STATE.excludedCampaigns, STATE.excludedAdGroups, STATE.includedShortCampaigns, !!opts.skipEligibility]);
   if(_baseRowsCache.has(cacheKey)) return _baseRowsCache.get(cacheKey);
   const result = baseRowsUncached(opts);
@@ -1734,9 +1747,14 @@ async function loadStateFromServer(){
     if(!appState.current_report) return; // 아직 아무도 저장한 적 없음 — 로컬 기본 STATE 그대로 사용
     const { data, error } = await sb.from('reports').select('state').eq('name', appState.current_report).single();
     if(error) throw error;
+    // Object.assign은 병합이라, 새로 불러온 리포트에 없는 필드(예: frozenRows)는 이전 리포트에서
+    // 남아있던 값을 그대로 들고 있게 된다 — 얼린 스냅샷처럼 "없으면 라이브 계산"이 기본이어야 하는
+    // 필드는 병합 전에 명시적으로 비워야 잘못된(다른 리포트의) 스냅샷을 물려받지 않는다.
+    STATE.frozenRows = null; STATE.frozenEventRows = null;
     STATE = Object.assign(STATE, data.state || {});
     loadedReportName = appState.current_report;
     ensureStateShape();
+    USE_FROZEN = false; // "현재" 리포트는 계속 진행 중인 기간이라 항상 최신 raw 데이터로 계산한다
     showBanner('공유된 최신(현재) 리포트를 불러왔어요.','ok');
   }catch(e){ showBanner('상태 불러오기 실패: '+e.message,'error'); }
 }
@@ -1753,6 +1771,10 @@ async function saveStateToServer(){
   }
   btn.disabled=true; btn.innerHTML='<span class="spin">☁️</span> 저장 중...';
   try{
+    // 지금 이 순간의 baseRows() 결과를 얼려서 같이 저장한다 — raw 데이터 소스가 나중에 바뀌어도
+    // 이 리포트를 다시 열면(불러오기) 항상 "저장 당시" 숫자 그대로 보이게 하기 위함.
+    STATE.frozenRows = baseRows();
+    STATE.frozenEventRows = baseRows({skipEligibility:true});
     const savedAt = new Date().toISOString();
     const { error: upsertErr } = await sb.from('reports').upsert({name, state:STATE, saved_at:savedAt});
     if(upsertErr) throw upsertErr;
@@ -1793,10 +1815,17 @@ async function loadReportByName(name){
     // 상단 바로가기 목록은 "어느 리포트를 보고 있는지"와 무관한 내비게이션이라, 리포트를 전환해도
     // 그대로 유지한다 — 안 그러면 불러온 리포트에 저장된(오래된) 바로가기 목록으로 뒤바뀌어버린다.
     const keepShortcuts = STATE.reportShortcuts;
+    // Object.assign은 병합이라 이 리포트에 없는 필드는 이전에 보고 있던 리포트 값을 그대로 물고
+    // 있게 된다 — frozenRows처럼 "없으면 라이브 계산"이 기본이어야 하는 필드는 병합 전에 비워야
+    // 방금 전 다른 리포트의 스냅샷을 잘못 물려받지 않는다.
+    STATE.frozenRows = null; STATE.frozenEventRows = null;
     STATE = Object.assign(STATE, data.state || {});
     STATE.reportShortcuts = keepShortcuts;
     loadedReportName = name;
     ensureStateShape();
+    // 이 리포트에 얼린 스냅샷이 있으면(저장 시점 이후 추가된 기능) 그걸 그대로 보여준다 — raw 데이터가
+    // 그 사이 바뀌었어도 숫자가 흔들리지 않는다. 스냅샷이 없는 예전 리포트는 예전처럼 최신 데이터로 계산한다.
+    USE_FROZEN = !!STATE.frozenRows;
     updateWorkingReportLabel();
     renderCurrentTab();
     showBanner(VIEW_MODE
@@ -1946,6 +1975,7 @@ async function syncData(){
     const parsed = await fetchCsv(CONFIG.csvUrl);
     RAWROWS = parsed.data.filter(r=>Object.values(r).some(v=>v!==''&&v!==null&&v!==undefined));
     invalidateBaseRowsCache();
+    USE_FROZEN = false; // 명시적으로 새로고침을 요청한 것이므로 얼린 스냅샷 대신 최신 데이터로 다시 계산
     RAWHEADERS = parsed.meta.fields||[];
     const coreKeys = ['date','brand','country','media','creativeType','campaign','spent','impression','click','view'];
     if(coreKeys.some(k=>!CONFIG.fieldMap[k]) && RAWHEADERS.length){ CONFIG.fieldMap = guessMapping(RAWHEADERS); saveJSON(LS.config, CONFIG); }
