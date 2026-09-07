@@ -471,6 +471,7 @@ function ensureStateShape(){
   STATE.highlights = STATE.highlights || {};
   STATE.cardHighlights = STATE.cardHighlights || {};
   STATE.images = STATE.images || {};
+  STATE.imgVersions = STATE.imgVersions || {};
   STATE.targets = STATE.targets || {};
   STATE.targets.summary = STATE.targets.summary || {budget:0,cpm:0,ctr:0,cpc:0,vtr:0,landingView:0};
   STATE.targets.country = STATE.targets.country || {};
@@ -1120,19 +1121,23 @@ async function setSlotImage(slotKey, file){
   const { error } = await sb.storage.from(REPORT_IMAGES_BUCKET).upload(imgKey, blob, {upsert:true, contentType:'image/jpeg'});
   if(error){ showBanner('이미지 업로드 실패: '+error.message, 'error'); return; }
   STATE.images[slotKey] = imgKey;
+  STATE.imgVersions[slotKey] = Date.now();
   renderCurrentTab();
 }
 function buildImgSlot(slotKey, legacyKey, extraClass){
   // legacyKey: 이름 기준 공유 방식으로 바꾸기 전, 카드별로 저장했던 옛 키 — 예전에 올린 사진도 계속 보이게 함
   // STATE.images에 slotKey가 명시적으로 있으면(삭제 시 null로 기록) 그 값을 그대로 따르고,
   // 아예 기록이 없을 때만 이름 기반 canonical 키로 Storage에서 찾아본다.
-  let imgKey;
-  if(slotKey in STATE.images) imgKey = STATE.images[slotKey];
-  else if(legacyKey && legacyKey in STATE.images) imgKey = STATE.images[legacyKey];
+  let imgKey, versionKey;
+  if(slotKey in STATE.images){ imgKey = STATE.images[slotKey]; versionKey = slotKey; }
+  else if(legacyKey && legacyKey in STATE.images){ imgKey = STATE.images[legacyKey]; versionKey = legacyKey; }
   else imgKey = canonicalImgKey(slotKey);
   const legacyAttr = legacyKey ? ` data-legacy-slot="${esc(legacyKey)}"` : '';
+  // 사진을 같은 사람 이름으로 다시 올려도 Storage 경로(imgKey)는 그대로라, 쿼리스트링에 업로드
+  // 시각을 붙여주지 않으면 브라우저/CDN 캐시가 예전 사진을 계속 보여준다.
+  const ver = versionKey ? STATE.imgVersions[versionKey] : null;
   const imgHtml = imgKey
-    ? `<img src="${esc(reportImageUrl(imgKey))}" style="display:none" onload="handleImgSlotLoad(this)" onerror="handleImgSlotError(this)"><button class="remove-btn" data-remove-slot="${esc(slotKey)}"${legacyAttr}>✕</button>`
+    ? `<img src="${esc(reportImageUrl(imgKey) + (ver ? ('?v='+ver) : ''))}" style="display:none" onload="handleImgSlotLoad(this)" onerror="handleImgSlotError(this)"><button class="remove-btn" data-remove-slot="${esc(slotKey)}"${legacyAttr}>✕</button>`
     : '';
   return `<div class="img-slot ${extraClass||''}" data-slot="${esc(slotKey)}"${legacyAttr}>
     ${imgHtml}
