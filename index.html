@@ -1828,12 +1828,20 @@ document.getElementById('shortcutModalAdd').addEventListener('click', ()=>{
 // 지금 화면에 불러와진 리포트의 서버상 이름 — 날짜를 바꿔서 저장할 때 "이름 바꾸기(수정)"인지
 // "새 리포트로 따로 저장"인지 구분하는 기준이 된다. 아직 아무 것도 안 불러왔으면 빈 문자열.
 let loadedReportName = '';
+// Supabase .single()이 아주 드물게 방금 저장된 행을 못 찾고 "Cannot coerce the result to a
+// single JSON object" 에러를 내는 순간이 있다(타이밍/네트워크 문제로 보임 — 다시 시도하면 됨).
+// 실패하면 한 번만 짧게 기다렸다 재시도한다.
+async function selectSingle(queryFn){
+  let res = await queryFn();
+  if(res.error){ await new Promise(r=>setTimeout(r,400)); res = await queryFn(); }
+  return res;
+}
 async function loadStateFromServer(){
   try{
-    const { data: appState, error: appErr } = await sb.from('app_state').select('current_report').eq('id',1).single();
+    const { data: appState, error: appErr } = await selectSingle(()=>sb.from('app_state').select('current_report').eq('id',1).single());
     if(appErr) throw appErr;
     if(!appState.current_report) return; // 아직 아무도 저장한 적 없음 — 로컬 기본 STATE 그대로 사용
-    const { data, error } = await sb.from('reports').select('state').eq('name', appState.current_report).single();
+    const { data, error } = await selectSingle(()=>sb.from('reports').select('state').eq('name', appState.current_report).single());
     if(error) throw error;
     // Object.assign은 병합이라, 새로 불러온 리포트에 없는 필드(예: frozenRows)는 이전 리포트에서
     // 남아있던 값을 그대로 들고 있게 된다 — 얼린 스냅샷처럼 "없으면 라이브 계산"이 기본이어야 하는
@@ -1897,7 +1905,7 @@ async function loadReportList(){
 }
 async function loadReportByName(name){
   if(!name) return;
-  const { data, error } = await sb.from('reports').select('state').eq('name', name).single();
+  const { data, error } = await selectSingle(()=>sb.from('reports').select('state').eq('name', name).single());
   if(error){ showBanner('불러오기 실패: '+error.message,'error'); return; }
   try{
     // 상단 바로가기 목록은 "어느 리포트를 보고 있는지"와 무관한 내비게이션이라, 리포트를 전환해도
