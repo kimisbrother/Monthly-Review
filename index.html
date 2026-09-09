@@ -731,6 +731,9 @@ function groupBy(rows, keyFn){
 // 엑셀과 동일한 컬럼 순서: 광고비, 노출, 클릭, CPM, CPC, CTR, 조회, VTR, CPV
 const KO_HEADERS = ['광고비','노출','클릭','랜딩페이지뷰','CPM','CPC','CTR','조회','VTR','CPV'];
 function koCells(a){ return [fmtWon(a.spent), fmtInt(a.impression), fmtInt(a.click), fmtInt(a.landingView), fmtInt(a.cpm), fmtInt(a.cpc), fmtPct(a.ctr), fmtInt(a.view), fmtPct(a.vtr), fmtInt(a.cpv)]; }
+// 미디어믹스(계획 대비 실적) 표는 랜딩페이지뷰를 뺀 별도 컬럼 세트를 쓴다 — 다른 표(캠페인 성과 등)는 그대로 유지.
+const KO_HEADERS_MIX = ['광고비','노출','클릭','CPM','CPC','CTR','조회','VTR','CPV'];
+function koCellsMix(a){ return [fmtWon(a.spent), fmtInt(a.impression), fmtInt(a.click), fmtInt(a.cpm), fmtInt(a.cpc), fmtPct(a.ctr), fmtInt(a.view), fmtPct(a.vtr), fmtInt(a.cpv)]; }
 
 /* ===========================================================
    KPI 스탯 카드 (아이콘 + 큰 숫자)
@@ -890,6 +893,10 @@ function deltaBadge(key, current, base){
 function buildDeltaRow(actual, base){
   return ['spent','impression','click','landingView','cpm','cpc','ctr','view','vtr','cpv'].map(k=>deltaBadge(k, actual[k], base[k]));
 }
+// 미디어믹스 표 전용 — landingView 제외.
+function buildDeltaRowMix(actual, base){
+  return ['spent','impression','click','cpm','cpc','ctr','view','vtr','cpv'].map(k=>deltaBadge(k, actual[k], base[k]));
+}
 
 // Budget/CPM/CTR/CPC/VTR/LP View만 입력받아 Impression/Click/View를 역산한다.
 // Impression은 CPM 기준(=Budget/CPM*1000)으로만 구해지고, Click은 CPC가 있으면 CPC 기준(Budget/CPC)을
@@ -908,15 +915,15 @@ function buildMediaMixTable(rows, target){
   const t = target || {};
   const targetAgg = deriveMediaMixTarget(t);
   const actual = aggregate(rows);
-  const deltaRow = buildDeltaRow(actual, targetAgg);
+  const deltaRow = buildDeltaRowMix(actual, targetAgg);
   if(!(Number(t.budget)||Number(t.cpm)||Number(t.ctr)||Number(t.cpc)||Number(t.vtr))){
     return `<div class="empty-state">설정에서 미디어믹스(Target) 값을 입력하면 이 표가 채워져요.<br><br>` +
-      `<table style="margin-top:8px;"><thead><tr><th>구분</th>${KO_HEADERS.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>` +
-      `<tr class="actual-row"><td>실집행</td>${koCells(actual).map(c=>`<td>${c}</td>`).join('')}</tr></tbody></table></div>`;
+      `<table style="margin-top:8px;"><thead><tr><th>구분</th>${KO_HEADERS_MIX.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>` +
+      `<tr class="actual-row"><td>실집행</td>${koCellsMix(actual).map(c=>`<td>${c}</td>`).join('')}</tr></tbody></table></div>`;
   }
-  return `<table><thead><tr><th>구분</th>${KO_HEADERS.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>
-    <tr class="target-row"><td>미디어믹스</td>${koCells(targetAgg).map(c=>`<td>${c}</td>`).join('')}</tr>
-    <tr class="actual-row"><td>실집행</td>${koCells(actual).map(c=>`<td>${c}</td>`).join('')}</tr>
+  return `<table><thead><tr><th>구분</th>${KO_HEADERS_MIX.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>
+    <tr class="target-row"><td>미디어믹스</td>${koCellsMix(targetAgg).map(c=>`<td>${c}</td>`).join('')}</tr>
+    <tr class="actual-row"><td>실집행</td>${koCellsMix(actual).map(c=>`<td>${c}</td>`).join('')}</tr>
     <tr class="delta-row"><td>증감</td>${deltaRow.map(c=>`<td>${c}</td>`).join('')}</tr>
     </tbody></table>`;
 }
