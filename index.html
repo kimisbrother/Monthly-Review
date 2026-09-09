@@ -154,7 +154,9 @@
   .comment-box:focus{border-color:var(--primary);}
   .comment-box:empty:before{content:attr(data-placeholder); color:var(--text-faint);}
 
-  .table-wrap{overflow-x:auto; border:1px solid var(--border); border-radius:14px;}
+  /* 표가 내용 기준으로 좁아지면서, 폭 100%였을 때 기준으로 그려지던 이 감싸는 박스(둥근 모서리)가
+     표보다 넓게 남아 모서리가 각지게 보이는 문제가 생긴다 — 박스 자체도 표 너비에 맞춰 줄어들게 한다. */
+  .table-wrap{display:inline-block; max-width:100%; vertical-align:top; overflow-x:auto; border:1px solid var(--border); border-radius:14px;}
   /* width:100%로 강제로 늘리면 숫자 열이 실제 값보다 훨씬 넓어져서, 가운데 정렬한 헤더가
      우측 정렬된 값들 위에서 시각적으로 안 맞아 보인다 — 내용 기준으로 자연스럽게 좁아지게 둔다. */
   table{border-collapse:collapse; font-size:13px; min-width:640px;}
