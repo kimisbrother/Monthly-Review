@@ -160,7 +160,9 @@
   /* 맨 왼쪽/오른쪽 열은 표의 바깥쪽 테두리와 바로 맞닿아서 다른 열보다 좌우 여백이 좁아 보인다 —
      바깥쪽에 닿는 쪽만 여백을 더 준다. */
   thead th:first-child, tbody td:first-child{padding-left:26px;}
-  thead th:last-child, tbody td:last-child{padding-right:26px;}
+  /* 캠페인(구분) 열을 제외한 나머지 지표 열은 우측 여백을 기존의 2배로 넓힌다. */
+  thead th:not(:first-child), tbody td:not(:first-child){padding-right:32px;}
+  thead th:last-child, tbody td:last-child{padding-right:52px;}
   tbody tr.row-tint td:not(.hl){background:var(--surface-2);}
   tbody tr.row-tint:hover td:not(.hl){background:rgba(31,87,149,0.09);}
   tbody td{padding:13px 16px; text-align:right; border-bottom:1px solid var(--border); font-family:var(--font-mono); font-variant-numeric:tabular-nums; white-space:nowrap; cursor:pointer; transition:background var(--dur) var(--ease);}
