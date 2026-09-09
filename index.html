@@ -167,6 +167,8 @@
   tbody tr.row-tint:hover td:not(.hl){background:rgba(31,87,149,0.09);}
   tbody td{padding:13px 16px; text-align:right; border-bottom:1px solid var(--border); font-family:var(--font-mono); font-variant-numeric:tabular-nums; white-space:nowrap; cursor:pointer; transition:background var(--dur) var(--ease);}
   tbody td:first-child{text-align:left; font-family:var(--font-sans); font-weight:500; cursor:default;}
+  /* 미디어믹스 표만 값(구분 라벨·수치·증감 배지)까지 전부 가운데 정렬한다. */
+  table.mix-table tbody td{text-align:center;}
   tbody tr:hover td{background:rgba(31,87,149,0.05);}
   tbody tr:last-child td{border-bottom:none;}
   tbody tr.total-row td, tbody tr.subtotal-row td{font-weight:800; background:var(--primary-tint); color:var(--ap-blue-900); cursor:default; border-top:2px solid var(--ap-blue-700); border-bottom:1px solid var(--ap-blue-700);}
@@ -923,10 +925,10 @@ function buildMediaMixTable(rows, target){
   const deltaRow = buildDeltaRowMix(actual, targetAgg);
   if(!(Number(t.budget)||Number(t.cpm)||Number(t.ctr)||Number(t.cpc)||Number(t.vtr))){
     return `<div class="empty-state">설정에서 미디어믹스(Target) 값을 입력하면 이 표가 채워져요.<br><br>` +
-      `<table style="margin-top:8px;"><thead><tr><th>구분</th>${KO_HEADERS_MIX.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>` +
+      `<table class="mix-table" style="margin-top:8px;"><thead><tr><th>구분</th>${KO_HEADERS_MIX.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>` +
       `<tr class="actual-row"><td>실집행</td>${koCellsMix(actual).map(c=>`<td>${c}</td>`).join('')}</tr></tbody></table></div>`;
   }
-  return `<table><thead><tr><th>구분</th>${KO_HEADERS_MIX.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>
+  return `<table class="mix-table"><thead><tr><th>구분</th>${KO_HEADERS_MIX.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>
     <tr class="target-row"><td>미디어믹스</td>${koCellsMix(targetAgg).map(c=>`<td>${c}</td>`).join('')}</tr>
     <tr class="actual-row"><td>실집행</td>${koCellsMix(actual).map(c=>`<td>${c}</td>`).join('')}</tr>
     <tr class="delta-row"><td>증감</td>${deltaRow.map(c=>`<td>${c}</td>`).join('')}</tr>
