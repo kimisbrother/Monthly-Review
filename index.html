@@ -2114,7 +2114,7 @@ async function syncData(prefetched){
     renderCurrentTab();
     const statusEl = document.getElementById('syncStatusLine');
     if(statusEl) statusEl.textContent = '마지막 동기화: '+new Date().toLocaleString('ko-KR')+' · '+RAWROWS.length.toLocaleString()+'행';
-    showBanner('동기화 완료 ('+RAWROWS.length.toLocaleString()+'행)','ok');
+    if(!prefetched) showBanner('동기화 완료 ('+RAWROWS.length.toLocaleString()+'행)','ok'); // 첫 로딩에서는 알리지 않고, 사용자가 직접 동기화할 때만 알린다
   }catch(e){ showBanner('동기화 실패: '+e.message,'error'); }
   finally{ btn.disabled=false; btn.innerHTML='데이터 Sync'; }
 }
