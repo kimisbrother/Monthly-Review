@@ -253,9 +253,27 @@
     .stat-card:first-child{border-top:none;}
   }
   @media (prefers-reduced-motion:reduce){ *{transition:none !important; animation:none !important;} }
+  /* ── 로딩 화면: 로고 위로 빛이 쓸고 지나가고, 아래 바가 흐른다. 데이터가 준비되면 즉시 사라진다 ── */
+  .splash{position:fixed; inset:0; z-index:9999; background:var(--paper); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:22px; transition:opacity 280ms var(--ease);}
+  .splash.done{opacity:0; pointer-events:none;}
+  .splash-logo{position:relative; width:min(300px,60vw); aspect-ratio:382/38;}
+  .splash-logo img{width:100%; height:100%; display:block;}
+  .splash-logo::after{content:''; position:absolute; inset:0;
+    background:linear-gradient(100deg, transparent 35%, rgba(150,200,255,.95) 50%, transparent 65%) no-repeat; background-size:260% 100%; background-position:130% 0;
+    -webkit-mask:url(assets/amorepacific-wordmark.png) center/100% 100% no-repeat; mask:url(assets/amorepacific-wordmark.png) center/100% 100% no-repeat;
+    animation:splash-shine 1.4s var(--ease) infinite;}
+  .splash-bar{width:min(300px,60vw); height:2px; background:var(--line); overflow:hidden;}
+  .splash-bar::before{content:''; display:block; width:40%; height:100%; background:var(--amore); animation:splash-run 1.1s var(--ease) infinite;}
+  @keyframes splash-shine{from{background-position:130% 0;} to{background-position:-30% 0;}}
+  @keyframes splash-run{from{transform:translateX(-100%);} to{transform:translateX(250%);}}
+  @media (prefers-reduced-motion:reduce){ .splash-logo::after,.splash-bar::before{animation:none;} }
 </style>
 </head>
 <body>
+<div class="splash" id="splash" aria-hidden="true">
+  <div class="splash-logo"><img src="assets/amorepacific-wordmark.png" alt=""></div>
+  <div class="splash-bar"></div>
+</div>
 
 <header class="brandbar">
   <div class="wrap">
@@ -2366,7 +2384,15 @@ document.getElementById('pdfBtn').addEventListener('click', async ()=>{
 /* ===========================================================
    초기화
 =========================================================== */
+function hideSplash(){
+  const el = document.getElementById('splash');
+  if(!el) return;
+  el.classList.add('done');
+  setTimeout(()=>el.remove(), 320);
+}
+setTimeout(hideSplash, 8000); // 어떤 경우에도 로딩 화면이 남지 않게
 (async function init(){
+  try{
   ensureStateShape();
   // 시트 CSV(가장 느린 구간)를 리포트 상태 조회와 동시에 시작한다 — 순서대로 기다리지 않는다.
   const csvPromise = CONFIG.csvUrl ? fetchCsv(CONFIG.csvUrl) : null;
@@ -2376,6 +2402,7 @@ document.getElementById('pdfBtn').addEventListener('click', async ()=>{
   renderShortcutBar();
   if(!CONFIG.csvUrl){ openSettings(); }
   else { await syncData(csvPromise); }
+  } finally { hideSplash(); }
 })();
 </script>
 </body>
