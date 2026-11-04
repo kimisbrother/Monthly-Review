@@ -1894,7 +1894,7 @@ async function selectSingle(queryFn){
   if(res.error){ await new Promise(r=>setTimeout(r,400)); res = await queryFn(); }
   return res;
 }
-async function loadStateFromServer(){
+async function loadStateFromServer(quiet){
   try{
     // "현재" 리포트는 항상 최신 raw로 계산(USE_FROZEN=false)하므로 얼린 스냅샷(frozenRows 등, 3MB 이상)은 필요 없다.
     // current_report_lite 뷰는 app_state 포인터와 reports를 한 번에 조인하고 스냅샷을 뺀 상태만 돌려준다.
@@ -1918,7 +1918,7 @@ async function loadStateFromServer(){
     loadedReportName = appState.current_report; renderShortcutBar();
     ensureStateShape();
     USE_FROZEN = false; // "현재" 리포트는 계속 진행 중인 기간이라 항상 최신 raw 데이터로 계산한다
-    showBanner('공유된 최신(현재) 리포트를 불러왔어요.','ok');
+    if(!quiet) showBanner('공유된 최신(현재) 리포트를 불러왔어요.','ok'); // 첫 로딩에서는 알리지 않는다
   }catch(e){ showBanner('상태 불러오기 실패: '+e.message,'error'); }
 }
 async function saveStateToServer(){
@@ -2447,7 +2447,7 @@ const RAW_STALE_MS = 6*3600*1000; // 적재가 이만큼 멈췄으면 시트 CSV
   ensureStateShape();
   // Raw 데이터와 리포트 상태를 동시에 조회한다 — 순서대로 기다리지 않는다.
   const rawPromise = fetchRawFromSupabase().catch(()=>null);
-  await loadStateFromServer();
+  await loadStateFromServer(true);
   ensureStateShape();
   renderShortcutBar();
   if(!CONFIG.csvUrl){ openSettings(); return; }
