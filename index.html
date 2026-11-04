@@ -1626,10 +1626,18 @@ function renderCountryTab(country){
   html += `<div class="card card-comment">${sectionHead('c-'+cKey+'-creative-comment','소재별 성과비교 코멘트')}${buildCommentEditor(country+'-creative-comment','소재별 성과 코멘트를 입력하세요')}</div>`;
 
   if(ctCol){
-    const manualRows = rows.filter(r => String(r[ctCol])!=='Spark Ads' && String(r[ctCol])!=='Partnership Ads');
+    const nonCreatorRows = rows.filter(r => String(r[ctCol])!=='Spark Ads' && String(r[ctCol])!=='Partnership Ads');
+    // 10월부터 캠페인명에 Brand가 들어간 캠페인은 인플루언서가 아니라 브랜드 자체 오가닉 콘텐츠 — 별도 섹션으로 분리
+    const isBrandCampaign = r => campaignCol && /brand/i.test(String(r[campaignCol]||''));
+    const manualRows = nonCreatorRows.filter(r => !isBrandCampaign(r));
+    const brandRows = nonCreatorRows.filter(isBrandCampaign);
     if(manualRows.length){
       html += `<div class="card">${sectionHead('c-'+cKey+'-inf-manual','Meta 소재 (인플루언서별)')}
         ${buildInfluencerGrid(manualRows, {groupCol: infCol||adCol, labelCol: infCol||adCol, slotPrefix:'c-'+cKey+'-manual'})}</div>`;
+    }
+    if(brandRows.length){
+      html += `<div class="card">${sectionHead('c-'+cKey+'-inf-brand','Meta Brand 소재 (브랜드 오가닉 콘텐츠)')}
+        ${buildInfluencerGrid(brandRows, {groupCol: infCol||adCol, labelCol: infCol||adCol, slotPrefix:'c-'+cKey+'-brand'})}</div>`;
     }
     const partnershipRows = rows.filter(r => String(r[ctCol])==='Partnership Ads');
     if(partnershipRows.length){
