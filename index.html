@@ -1786,6 +1786,38 @@ function renderCurrentTab(){
   }
   if(currentTab==='summary') renderSummaryTab();
   else renderCountryTab(currentTab);
+  animateStatValues();
+}
+
+/* 캠페인 개요 숫자 카운트업 — 탭을 바꾸거나 값이 달라졌을 때만 재생하고, 같은 값의 재렌더링에서는 반복하지 않는다. */
+let _statSig = '';
+let _statStart = null;
+function animateStatValues(){
+  const els = [...document.querySelectorAll('.stat-card-value')];
+  const sig = currentTab+'|'+els.map(e=>e.textContent).join('|');
+  if(sig===_statSig) return;
+  _statSig = sig;
+  if(matchMedia('(prefers-reduced-motion:reduce)').matches) return;
+  const items = [];
+  els.forEach(el=>{
+    const final = el.textContent, m = final.match(/^(\D*?)([\d,]+(?:\.\d+)?)(\D*)$/);
+    if(!m) return;
+    const num = parseFloat(m[2].replace(/,/g,'')), dec = (m[2].split('.')[1]||'').length;
+    const fmt = v => m[1]+v.toLocaleString('ko-KR',{minimumFractionDigits:dec, maximumFractionDigits:dec})+m[3];
+    el.textContent = fmt(0);
+    items.push({el, final, num, fmt});
+  });
+  _statStart = ()=>{
+    const t0 = performance.now(), DUR = 1000;
+    const finish = ()=>items.forEach(it=>{ it.el.textContent = it.final; });
+    (function tick(now){
+      const k = Math.min(1, (now-t0)/DUR), e = 1-Math.pow(1-k,3);
+      items.forEach(it=>{ it.el.textContent = k<1 ? it.fmt(it.num*e) : it.final; });
+      if(k<1) requestAnimationFrame(tick);
+    })(t0);
+    setTimeout(finish, DUR+150); // 백그라운드 탭처럼 애니메이션 프레임이 멈춰도 최종 값은 반드시 표시
+  };
+  if(!document.getElementById('splash')) _statStart(); // 로딩 화면이 있으면 사라지기 시작할 때 재생
 }
 
 /* ===========================================================
@@ -1973,7 +2005,15 @@ async function fetchCsv(url){
   if(!res.ok) throw new Error('HTTP '+res.status);
   const text = await res.text();
   if(text.trim().slice(0,15).toLowerCase().includes('<!doctype')) throw new Error('CSV가 아니라 HTML이 반환됐어요.');
+  // 마지막으로 받은 CSV를 브라우저에 보관 — 구글 시트 응답이 느린 날(수 초~십수 초)에도 다음 접속은 바로 그려진다.
+  try{ caches.open('mr-csv').then(c=>c.put(url, new Response(text))).catch(()=>{}); }catch(_){}
   return Papa.parse(text, {header:true, skipEmptyLines:true});
+}
+async function readCachedCsv(url){
+  try{
+    const r = await (await caches.open('mr-csv')).match(url);
+    return r ? Papa.parse(await r.text(), {header:true, skipEmptyLines:true}) : null;
+  }catch(_){ return null; }
 }
 function guessMapping(headers){
   const guesses = {
@@ -2388,9 +2428,10 @@ function hideSplash(){
   const el = document.getElementById('splash');
   if(!el) return;
   el.classList.add('done');
+  if(_statStart){ const f=_statStart; _statStart=null; f(); }
   setTimeout(()=>el.remove(), 320);
 }
-setTimeout(hideSplash, 8000); // 어떤 경우에도 로딩 화면이 남지 않게
+setTimeout(hideSplash, 40000); // 응답이 아예 오지 않는 경우에만 로딩 화면을 걷는다
 (async function init(){
   try{
   ensureStateShape();
@@ -2401,7 +2442,16 @@ setTimeout(hideSplash, 8000); // 어떤 경우에도 로딩 화면이 남지 않
   ensureStateShape();
   renderShortcutBar();
   if(!CONFIG.csvUrl){ openSettings(); }
-  else { await syncData(csvPromise); }
+  else {
+    const cached = await readCachedCsv(CONFIG.csvUrl);
+    if(cached){
+      await syncData(Promise.resolve(cached)); // 보관된 데이터로 먼저 그리고
+      hideSplash();
+      await syncData(csvPromise);              // 최신 데이터가 도착하면 조용히 갱신
+    } else {
+      await syncData(csvPromise);
+    }
+  }
   } finally { hideSplash(); }
 })();
 </script>
