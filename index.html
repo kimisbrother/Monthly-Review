@@ -398,6 +398,7 @@
 
       <details class="settings-collapse">
         <summary>국가별 미디어믹스 Target / Smart+·Advantage 적용일</summary>
+        <div class="desc" style="margin:6px 0;">CPM·CTR·CPC·VTR을 모두 0으로 두면 직전에 집행했던 가장 최근 월 기준으로 자동 표시돼요. 첫 집행이라 이전 데이터가 없으면 벤치마크 값을 직접 입력해 주세요.</div>
         <div class="settings-section" id="targetCountryGrid"></div>
       </details>
 
@@ -929,7 +930,7 @@ function deriveMediaMixTarget(t){
     ctr:safeDiv(click,impression), cpc:safeDiv(budget,click), cpm:safeDiv(budget,impression)*1000,
     vtr:safeDiv(view,impression), cpv:safeDiv(budget,view) };
 }
-function buildMediaMixTable(rows, target){
+function buildMediaMixTable(rows, target, refNote){
   const t = target || {};
   const targetAgg = deriveMediaMixTarget(t);
   const actual = aggregate(rows);
@@ -940,7 +941,7 @@ function buildMediaMixTable(rows, target){
       `<tr class="actual-row"><td>실집행</td>${koCellsMix(actual).map(c=>`<td>${c}</td>`).join('')}</tr></tbody></table></div>`;
   }
   return `<table class="mix-table"><thead><tr><th>구분</th>${KO_HEADERS_MIX.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>
-    <tr class="target-row"><td>미디어믹스</td>${koCellsMix(targetAgg).map(c=>`<td>${c}</td>`).join('')}</tr>
+    <tr class="target-row"><td>미디어믹스${refNote?`<br><span style="font-weight:400;font-size:10.5px;">(${refNote})</span>`:''}</td>${koCellsMix(targetAgg).map(c=>`<td>${c}</td>`).join('')}</tr>
     <tr class="actual-row"><td>실집행</td>${koCellsMix(actual).map(c=>`<td>${c}</td>`).join('')}</tr>
     <tr class="delta-row"><td>증감</td>${deltaRow.map(c=>`<td>${c}</td>`).join('')}</tr>
     </tbody></table>`;
@@ -1613,9 +1614,9 @@ function renderCountryTab(country){
     uniqueVals(rows, mediaCol).forEach(media=>{
       const mrows = rows.filter(r=>String(r[mediaCol])===media);
       const tid = 'c-'+cKey+'-mix-'+media.replace(/[^a-zA-Z0-9]/g,'_');
-      const t = targetC[media.toLowerCase()];
+      const rt = resolveMixTarget(country, media, targetC[media.toLowerCase()]);
       html += `<div class="card">${sectionHead(tid,media)}
-        <div class="table-wrap">${buildMediaMixTable(mrows, t)}</div></div>`;
+        <div class="table-wrap">${buildMediaMixTable(mrows, rt.t, rt.month ? parseInt(rt.month.slice(5),10)+'월 기준' : '')}</div></div>`;
     });
   }
 
@@ -2190,14 +2191,35 @@ function buildMappingUI(headers){
   }).join('');
 }
 // 참고 월(yearMonth)의 실제 데이터로 CPM/CTR/CPC/VTR/LPV 입력칸을 채운다. filterFn으로 국가/매체 범위를 좁힐 수 있다.
-function fillRefMonthFields(yearMonth, filterFn, fieldEls){
+function refMonthTarget(yearMonth, filterFn){
   const rows = RAWROWS.filter(r=>{ const d=getDate(r); return d && toDateInput(d).slice(0,7)===yearMonth && (!filterFn || filterFn(r)); });
   const a = aggregate(rows);
-  if(fieldEls.cpm) fieldEls.cpm.value = Math.round(a.cpm);
-  if(fieldEls.ctr) fieldEls.ctr.value = (a.ctr*100).toFixed(2);
-  if(fieldEls.cpc) fieldEls.cpc.value = Math.round(a.cpc);
-  if(fieldEls.vtr) fieldEls.vtr.value = (a.vtr*100).toFixed(2);
-  if(fieldEls.landingView) fieldEls.landingView.value = Math.round(a.landingView);
+  return { spent:a.spent, cpm:Math.round(a.cpm), ctr:+(a.ctr*100).toFixed(2), cpc:Math.round(a.cpc), vtr:+(a.vtr*100).toFixed(2), landingView:Math.round(a.landingView) };
+}
+function fillRefMonthFields(yearMonth, filterFn, fieldEls){
+  const v = refMonthTarget(yearMonth, filterFn);
+  if(fieldEls.cpm) fieldEls.cpm.value = v.cpm;
+  if(fieldEls.ctr) fieldEls.ctr.value = v.ctr.toFixed(2);
+  if(fieldEls.cpc) fieldEls.cpc.value = v.cpc;
+  if(fieldEls.vtr) fieldEls.vtr.value = v.vtr.toFixed(2);
+  if(fieldEls.landingView) fieldEls.landingView.value = v.landingView;
+}
+// 국가·매체 믹스 Target의 CPM/CTR/CPC/VTR이 모두 비어 있으면(참고 월에 집행이 없던 경우) 리포트 시작 월 이전 중
+// 집행이 있었던 가장 최근 월의 실적으로 대체한다. 이전 집행이 전혀 없으면(첫 집행) 그대로 비워 둔다 —
+// 그때는 설정에서 벤치마크를 직접 입력하면 된다(값이 하나라도 있으면 이 대체는 일어나지 않는다).
+function resolveMixTarget(country, media, t){
+  t = t || {};
+  if(Number(t.cpm)||Number(t.ctr)||Number(t.cpc)||Number(t.vtr)) return { t, month:'' };
+  const startMonth = String(STATE.dateRange.start||'').slice(0,7);
+  if(!startMonth) return { t, month:'' };
+  const countryCol = CONFIG.fieldMap.country, mediaCol = CONFIG.fieldMap.media;
+  const filterFn = r=>String(r[countryCol])===country && String(r[mediaCol]).toLowerCase()===media.toLowerCase();
+  const months = availableMonths().filter(m=>m<startMonth).reverse();
+  for(const m of months){
+    const v = refMonthTarget(m, filterFn);
+    if(v.spent>0 && (v.cpm||v.cpc||v.ctr||v.vtr)) return { t:{ ...t, cpm:v.cpm, ctr:v.ctr, cpc:v.cpc, vtr:v.vtr, landingView:v.landingView }, month:m };
+  }
+  return { t, month:'' };
 }
 function monthSelectOptions(months, selected){
   return ['<option value="">-- 월 선택 --</option>'].concat(
