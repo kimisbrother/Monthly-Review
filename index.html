@@ -2272,19 +2272,24 @@ function buildTargetCountryUI(){
       const mk = media.toLowerCase();
       const mt = t[mk] || {};
       const actualBudget = aggregate(countryRows.filter(r=>String(r[mediaCol])===media)).spent;
+      // 값이 모두 비어 있어 직전 집행 월로 자동 대체 중이면, 0 대신 실제 적용 중인 값을 흐리게(placeholder) 보여준다.
+      // value는 비워 두므로 저장해도 0으로 남아 다음에도 같은 자동 대체가 계속 적용된다.
+      const fb = resolveMixTarget(country, media, mt), auto = fb.month ? fb.t : null;
+      const iv = (f, d)=> auto ? `value="" placeholder="${auto[f]!=null?auto[f]:0}"` : `value="${mt[f]||d}"`;
       return `<div class="field" style="margin-top:6px; margin-bottom:2px;">
         <label style="font-weight:500; font-size:11px;">${esc(media)} 참고 월 — 자동 불러오기</label>
         <select data-refmonth-country="${cKey}" data-refmonth-media="${mk}" style="width:100%; padding:5px; border:1px solid var(--border); border-radius:6px; font-size:11.5px;">${monthSelectOptions(months, mt.refMonth)}</select>
+        ${auto?`<div class="desc" style="margin-top:3px;">참고 월에 집행이 없어 ${parseInt(fb.month.slice(5),10)}월 실적(흐린 숫자)을 기준으로 표에 표시 중이에요. 직접 값을 입력하면 그 값이 우선해요.</div>`:''}
       </div>
       <div class="target-header"><span class="spacer"></span><span>Budget</span><span>CPM</span><span>CTR(%)</span><span>CPC</span><span>VTR(%)</span><span>LP View</span></div>
       <div class="target-row-grid">
         <div class="trg-label">${esc(media)}</div>
         <input type="number" data-t-country="${cKey}" data-t-media="${mk}" data-t-field="budget" value="${actualBudget||0}">
-        <input type="number" data-t-country="${cKey}" data-t-media="${mk}" data-t-field="cpm" value="${mt.cpm||0}">
-        <input type="number" step="0.01" data-t-country="${cKey}" data-t-media="${mk}" data-t-field="ctr" value="${mt.ctr||0}">
-        <input type="number" data-t-country="${cKey}" data-t-media="${mk}" data-t-field="cpc" value="${mt.cpc||0}">
-        <input type="number" step="0.01" data-t-country="${cKey}" data-t-media="${mk}" data-t-field="vtr" value="${mt.vtr||0}">
-        <input type="number" data-t-country="${cKey}" data-t-media="${mk}" data-t-field="landingView" value="${mt.landingView||0}">
+        <input type="number" data-t-country="${cKey}" data-t-media="${mk}" data-t-field="cpm" ${iv('cpm',0)}>
+        <input type="number" step="0.01" data-t-country="${cKey}" data-t-media="${mk}" data-t-field="ctr" ${iv('ctr',0)}>
+        <input type="number" data-t-country="${cKey}" data-t-media="${mk}" data-t-field="cpc" ${iv('cpc',0)}>
+        <input type="number" step="0.01" data-t-country="${cKey}" data-t-media="${mk}" data-t-field="vtr" ${iv('vtr',0)}>
+        <input type="number" data-t-country="${cKey}" data-t-media="${mk}" data-t-field="landingView" ${iv('landingView',0)}>
       </div>
       <div class="field" style="margin-top:2px;"><label style="font-weight:500;">${esc(media)} 최적화 적용일 (선택)</label>
         <input type="date" data-opt-country="${cKey}" data-opt-media="${mk}" value="${od[mk]||''}"></div>`;
