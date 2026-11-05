@@ -337,7 +337,7 @@
 
       <div class="settings-section">
         <div class="ss-title">데이터 연결</div>
-        <div class="field"><label>Raw 데이터 CSV 게시 URL</label><input type="text" id="cfg-csvUrl"></div>
+        <div class="field"><label>Raw 데이터 출처</label><div class="desc">Meta·TikTok 광고 플랫폼에서 매시간 자동 수집한 데이터(Supabase <code>ads_amore</code>)를 읽어요. 시트는 사용하지 않습니다.</div></div>
         <button class="btn" id="testConnBtn" style="width:100%; justify-content:center;">연결 테스트</button>
         <div class="status-line" id="connStatus"></div>
         <div id="mappingSection" style="display:none; margin-top:12px;">
@@ -2008,21 +2008,6 @@ async function loadReportByName(name){
 /* ===========================================================
    CSV 동기화
 =========================================================== */
-async function fetchCsv(url){
-  const res = await fetch(url, {cache:'no-store'});
-  if(!res.ok) throw new Error('HTTP '+res.status);
-  const text = await res.text();
-  if(text.trim().slice(0,15).toLowerCase().includes('<!doctype')) throw new Error('CSV가 아니라 HTML이 반환됐어요.');
-  // 마지막으로 받은 CSV를 브라우저에 보관 — 구글 시트 응답이 느린 날(수 초~십수 초)에도 다음 접속은 바로 그려진다.
-  try{ caches.open('mr-csv').then(c=>c.put(url, new Response(text))).catch(()=>{}); }catch(_){}
-  return Papa.parse(text, {header:true, skipEmptyLines:true});
-}
-async function readCachedCsv(url){
-  try{
-    const r = await (await caches.open('mr-csv')).match(url);
-    return r ? Papa.parse(await r.text(), {header:true, skipEmptyLines:true}) : null;
-  }catch(_){ return null; }
-}
 function guessMapping(headers){
   const guesses = {
     date:['date','일자','날짜'], brand:['brand','브랜드'], country:['country','국가'], media:['media','매체'],
@@ -2148,10 +2133,9 @@ document.addEventListener('click', e=>{
 
 async function syncData(prefetched){
   const btn=document.getElementById('syncBtn');
-  if(!CONFIG.csvUrl){ openSettings(); return; }
   btn.disabled=true; btn.innerHTML='<span class="spin">⟲</span>';
   try{
-    const parsed = await (prefetched || fetchCsv(CONFIG.csvUrl));
+    const parsed = await (prefetched || loadRawData());
     RAWROWS = parsed.data.filter(r=>Object.values(r).some(v=>v!==''&&v!==null&&v!==undefined));
     invalidateBaseRowsCache();
     USE_FROZEN = false; // 명시적으로 새로고침을 요청한 것이므로 얼린 스냅샷 대신 최신 데이터로 다시 계산
@@ -2180,7 +2164,6 @@ document.getElementById('loadReportBtn').addEventListener('click', async ()=>{
 =========================================================== */
 const modal = document.getElementById('settingsModal');
 function openSettings(){
-  document.getElementById('cfg-csvUrl').value = CONFIG.csvUrl||'';
   document.getElementById('cfg-rangeStart').value = STATE.dateRange.start||'';
   document.getElementById('cfg-rangeEnd').value = STATE.dateRange.end||'';
   const mapSection = document.getElementById('mappingSection');
@@ -2302,12 +2285,10 @@ document.addEventListener('change', e=>{
   });
 });
 document.getElementById('testConnBtn').addEventListener('click', async ()=>{
-  const url = document.getElementById('cfg-csvUrl').value.trim();
   const status = document.getElementById('connStatus');
-  if(!url){ status.textContent='URL을 입력해주세요.'; status.className='status-line show error'; return; }
   status.textContent='연결 확인 중...'; status.className='status-line show';
   try{
-    const parsed = await fetchCsv(url);
+    const parsed = await loadRawData();
     const headers = parsed.meta.fields||[];
     RAWHEADERS = headers;
     RAWROWS = parsed.data.filter(r=>Object.values(r).some(v=>v!==''&&v!==null&&v!==undefined));
@@ -2321,7 +2302,6 @@ document.getElementById('testConnBtn').addEventListener('click', async ()=>{
   }catch(e){ status.textContent='연결 실패: '+e.message; status.className='status-line show error'; }
 });
 document.getElementById('modalSave').addEventListener('click', ()=>{
-  CONFIG.csvUrl = document.getElementById('cfg-csvUrl').value.trim();
   document.querySelectorAll('#mapGrid select').forEach(sel=>{ CONFIG.fieldMap[sel.dataset.map]=sel.value; });
   saveJSON(LS.config, CONFIG);
 
@@ -2440,44 +2420,36 @@ function hideSplash(){
   setTimeout(()=>el.remove(), 320);
 }
 setTimeout(hideSplash, 40000); // 응답이 아예 오지 않는 경우에만 로딩 화면을 걷는다
-// Supabase amore_raw(시트 Raw Data를 Apps Script가 주기적으로 적재)를 한 번에 읽는다. 없거나 실패하면 null → 시트 CSV로 대체.
+// 플랫폼 API로 수집한 ads_amore(amore_api_rows)를 시트 Raw Data와 같은 열 이름으로 읽는다. 시트는 쓰지 않는다.
 async function fetchRawFromSupabase(){
-  const { data, error } = await sb.rpc('amore_raw_rows');
-  if(error || !data || !Array.isArray(data.rows) || !data.rows.length) return null;
+  const { data, error } = await sb.rpc('amore_api_rows');
+  if(error || !data || !Array.isArray(data.rows) || data.rows.length<1000) return null; // 비었거나 비정상적으로 적으면 실패로 본다
   return {
     parsed: { data: data.rows, meta: { fields: data.headers || Object.keys(data.rows[0]) } },
     syncedAt: data.synced_at ? new Date(data.synced_at) : null
   };
 }
-const RAW_STALE_MS = 6*3600*1000; // 적재가 이만큼 멈췄으면 시트 CSV로도 확인한다
+async function loadRawData(){
+  const raw = (await fetchRawFromSupabase()) || (await fetchRawFromSupabase()); // 일시적 실패에 대비해 한 번 더 시도
+  if(!raw) throw new Error('광고 데이터를 불러오지 못했어요. 잠시 뒤 다시 시도해 주세요.');
+  warnIfCollectStale(raw.syncedAt);
+  return raw.parsed;
+}
+const RAW_STALE_MS = 6*3600*1000; // 수집이 매시간 도는데 이만큼 멈췄으면 알린다
+function warnIfCollectStale(syncedAt){
+  if(syncedAt && (Date.now()-syncedAt) > RAW_STALE_MS)
+    showBanner('광고 데이터 수집이 '+Math.floor((Date.now()-syncedAt)/3600000)+'시간째 멈춰 있어요. 화면 숫자가 최신이 아닐 수 있어요.','error');
+}
 (async function init(){
   try{
   ensureStateShape();
-  // Raw 데이터와 리포트 상태를 동시에 조회한다 — 순서대로 기다리지 않는다.
-  const rawPromise = fetchRawFromSupabase().catch(()=>null);
+  // 광고 데이터와 리포트 상태를 동시에 조회한다 — 순서대로 기다리지 않는다.
+  const dataPromise = loadRawData();
+  dataPromise.catch(()=>{}); // 실패는 syncData에서 await할 때 처리 — 그 전 unhandled 경고 방지
   await loadStateFromServer(true);
   ensureStateShape();
   renderShortcutBar();
-  if(!CONFIG.csvUrl){ openSettings(); return; }
-  const raw = await rawPromise;
-  if(raw){
-    await syncData(Promise.resolve(raw.parsed));
-    hideSplash();
-    const stale = !raw.syncedAt || (Date.now()-raw.syncedAt) > RAW_STALE_MS;
-    if(stale) await syncData(fetchCsv(CONFIG.csvUrl)); // 적재가 멈춘 경우에만 시트에서 최신본을 받아 덮는다
-    return;
-  }
-  // 대체 경로: 시트 CSV (보관본이 있으면 먼저 그리고 최신본으로 갱신)
-  const csvPromise = fetchCsv(CONFIG.csvUrl);
-  csvPromise.catch(()=>{}); // 실패는 syncData에서 await할 때 처리 — 그 전 unhandled 경고 방지
-  const cached = await readCachedCsv(CONFIG.csvUrl);
-  if(cached){
-    await syncData(Promise.resolve(cached));
-    hideSplash();
-    await syncData(csvPromise);
-  } else {
-    await syncData(csvPromise);
-  }
+  await syncData(dataPromise);
   } finally { hideSplash(); }
 })();
 </script>
