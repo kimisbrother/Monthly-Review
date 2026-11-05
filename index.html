@@ -2430,7 +2430,12 @@ async function fetchRawFromSupabase(){
   };
 }
 async function loadRawData(){
-  const raw = (await fetchRawFromSupabase()) || (await fetchRawFromSupabase()); // 일시적 실패에 대비해 한 번 더 시도
+  // 한동안 안 쓰이다 처음 부르면 DB가 3초 넘게 걸려 서버가 500으로 끊을 수 있다 — 두 번째부터는 1초 안팎이라 잠깐 쉬고 다시 부른다.
+  let raw = null;
+  for(let attempt=0; attempt<4 && !raw; attempt++){
+    if(attempt) await new Promise(r=>setTimeout(r, 700*attempt));
+    raw = await fetchRawFromSupabase().catch(()=>null);
+  }
   if(!raw) throw new Error('광고 데이터를 불러오지 못했어요. 잠시 뒤 다시 시도해 주세요.');
   warnIfCollectStale(raw.syncedAt);
   return raw.parsed;
